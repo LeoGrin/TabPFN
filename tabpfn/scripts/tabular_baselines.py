@@ -185,7 +185,7 @@ def eval_complete_f(x, y, test_x, test_y, key, clf_, metric_used, max_time, no_t
       else:
         best = {}
     else:
-      best=no_tune
+      best = no_tune.copy()
 
     start = time.time()
     clf = clf_(**best)
@@ -199,10 +199,11 @@ def eval_complete_f(x, y, test_x, test_y, key, clf_, metric_used, max_time, no_t
     inference_time = time.time() - start
     metric = metric_used(test_y, pred)
     
+    best = {'best': best}
     best['fit_time'] = fit_time
     best['inference_time'] = inference_time
 
-    return metric, pred, best
+    return metric, pred, best#, times
 
 def preprocess_impute(x, y, test_x, test_y, impute, one_hot, standardize, cat_features=[]):
     import warnings
@@ -1236,20 +1237,21 @@ param_grid_hyperopt['catboost'] = {
     'iterations': hp.randint('iterations', 100, 4000), # This is smaller than in paper, 4000 leads to ram overusage
 }
 
-def catboost_metric(x, y, test_x, test_y, cat_features, metric_used, max_time=300):
+def catboost_metric(x, y, test_x, test_y, cat_features, metric_used, max_time=300, no_tune=None, gpu_id=None):
     x, y, test_x, test_y = preprocess_impute(x, y, test_x, test_y
                                              , one_hot=False
                                              , cat_features=cat_features
                                              , impute=False
-                                             , standardize=False
-                                            , gpu_id=None)
+                                             , standardize=False)
 
     # Nans in categorical features must be encoded as separate class
     x[:, cat_features], test_x[:, cat_features] = np.nan_to_num(x[:, cat_features], -1), np.nan_to_num(
         test_x[:, cat_features], -1)
     
     if gpu_id is not None:
-         gpu_params = {task_type:"GPU", devices:gpu_id}
+         gpu_params = {'task_type':"GPU", 'devices':gpu_id}
+    else:
+        gpu_params = {}
 
     def make_pd_from_np(x):
         data = pd.DataFrame(x)
@@ -1282,7 +1284,7 @@ def catboost_metric(x, y, test_x, test_y, cat_features, metric_used, max_time=30
                 **gpu_params,
                 **params)
 
-    return eval_complete_f(x, y, test_x, test_y, 'xgb', clf_, metric_used, max_time, no_tune)
+    return eval_complete_f(x, y, test_x, test_y, 'catboost', clf_, metric_used, max_time, no_tune)
 
 
 # XGBoost
@@ -1307,7 +1309,10 @@ def xgb_metric(x, y, test_x, test_y, cat_features, metric_used, max_time=300, no
     # XGB handles missing values appropriately without imputation
     
     if gpu_id is not None:
-         gpu_params = {tree_method:'gpu_hist', gpu_id:gpu_id}
+         gpu_params = {'tree_method':'gpu_hist', 'gpu_id':gpu_id}
+    else:
+        gpu_params = {}
+
 
     x, y, test_x, test_y = preprocess_impute(x, y, test_x, test_y
                                              , one_hot=False
