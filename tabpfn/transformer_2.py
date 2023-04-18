@@ -12,7 +12,7 @@ from tabpfn.utils import SeqBN, bool_mask_to_att_mask
 
 
 
-class TransformerModel(nn.Module):
+class TransformerModel2(nn.Module):
     def __init__(self, encoder, n_out, ninp, nhead, nhid, nlayers, dropout=0.0, style_encoder=None, y_encoder=None,
                  pos_encoder=None, decoder=None, input_normalization=False, init_method=None, pre_norm=False,
                  activation='gelu', recompute_attn=False, num_global_att_tokens=0, full_attention=False,
@@ -28,12 +28,12 @@ class TransformerModel(nn.Module):
             self.transformer_encoder = TransformerEncoder(encoder_layer_creator(), nlayers)\
                 if all_layers_same_init else TransformerEncoderDiffInit(encoder_layer_creator, nlayers)
         elif transformer_type == "nystrom":
-            print("Nystrom transformer")
             #TODO nimp
             # self.transformer_encoder = NystromformerModel(NystromformerConfig(num_attention_heads=nhead, num_hidden_layers=nhid, hidden_dropout_prob=dropout,
             #                                                     attention_probs_dropout_prob=dropout, activation=activation,
             #                                                     pre_norm=pre_norm, recompute_attn=recompute_attn))
             self.transformer_encoder = NystromformerModel(NystromformerConfig())
+            print(self.transformer_encoder)
         self.ninp = ninp
         self.encoder = encoder
         self.y_encoder = y_encoder
@@ -109,11 +109,11 @@ class TransformerModel(nn.Module):
                 nn.init.zeros_(attn.out_proj.weight)
                 nn.init.zeros_(attn.out_proj.bias)
 
-    def forward(self, src, src_mask=None, single_eval_pos=None, x_already_encoded=False):
-        assert isinstance(src, tuple), 'inputs (src) have to be given as (x,y) or (style,x,y) tuple'
+    def forward(self, x, y, x_already_encoded=True, src_mask=None, single_eval_pos=None):
+        #assert isinstance(src, tuple), 'inputs (src) have to be given as (x,y) or (style,x,y) tuple'
 
-        if len(src) == 2: # (x,y) and no style
-            src = (None,) + src
+        #if len(src) == 2: # (x,y) and no style
+        src = (None,) + (x, y)
 
         style_src, x_src, y_src = src
         if not x_already_encoded:
@@ -141,8 +141,13 @@ class TransformerModel(nn.Module):
                 src_mask = (self.generate_global_att_globaltokens_matrix(*src_mask_args).to(x_src.device),
                             self.generate_global_att_trainset_matrix(*src_mask_args).to(x_src.device),
                             self.generate_global_att_query_matrix(*src_mask_args).to(x_src.device))
+        print(x_src.shape)
+        print(y_src.shape)
+        print(x_src[:single_eval_pos].shape)
         train_x = x_src[:single_eval_pos] + y_src[:single_eval_pos]
+        print(train_x.shape)
         src = torch.cat([global_src, style_src, train_x, x_src[single_eval_pos:]], 0)
+        print(src.shape)
 
         if self.input_ln is not None:
             src = self.input_ln(src)
@@ -150,10 +155,17 @@ class TransformerModel(nn.Module):
         if self.pos_encoder is not None:
             src = self.pos_encoder(src)
 
-        #src = src.unsqueeze(0)
+        print(src.shape)
+        print(src[1].shape)
+        print(src[2].shape)
+        src = src.unsqueeze(0)
         output = self.transformer_encoder(src, src_mask)
+        print(output.shape)
         output = self.decoder(output)
-        return output[single_eval_pos+len(style_src)+(self.global_att_embeddings.num_embeddings if self.global_att_embeddings else 0):]
+        print(output.shape)
+        print("number", single_eval_pos+len(style_src)+(self.global_att_embeddings.num_embeddings if self.global_att_embeddings else 0))
+        return output[:, single_eval_pos+len(style_src)+(self.global_att_embeddings.num_embeddings if self.global_att_embeddings else 0):, :]
+        #return output[single_eval_pos+len(style_src)+(self.global_att_embeddings.num_embeddings if self.global_att_embeddings else 0):]
 
     @torch.no_grad()
     def init_from_small_model(self, small_model):
@@ -205,7 +217,6 @@ class TransformerModel(nn.Module):
 
             my_layer.norm1.bias[:small_in_dim] = small_layer.norm1.bias
             my_layer.norm2.bias[:small_in_dim] = small_layer.norm2.bias
-
 
 class TransformerEncoderDiffInit(Module):
     r"""TransformerEncoder is a stack of N encoder layers

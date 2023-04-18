@@ -237,13 +237,13 @@ def print_on_master_only(is_master):
 
 def init_dist(device):
     #print('init dist')
-    if 'LOCAL_RANK' in os.environ:
+    if 'LOCAL_RANK' in os.environ and torch.cuda.device_count() > 1:
         # launched with torch.distributed.launch
         rank = int(os.environ["LOCAL_RANK"])
         print('torch.distributed.launch and my rank is', rank)
         torch.cuda.set_device(rank)
         os.environ['CUDA_VISIBLE_DEVICES'] = str(rank)
-        torch.distributed.init_process_group(backend="nccl", init_method="env://", timeout=datetime.timedelta(seconds=20),
+        torch.distributed.init_process_group(backend="nccl", init_method="env://", timeout=datetime.timedelta(seconds=50),
                                              world_size=torch.cuda.device_count(), rank=rank)
         torch.distributed.barrier()
         print_on_master_only(rank == 0)

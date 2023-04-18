@@ -19,6 +19,13 @@ import tabpfn.positional_encodings as positional_encodings
 from tabpfn.utils import init_dist
 from torch.cuda.amp import autocast, GradScaler
 from torch import nn
+import wandb
+import time
+from tqdm import tqdm
+import openml
+from tabpfn.scripts.transformer_prediction_interface import TabPFNClassifier
+from evaluate_model import get_validation_performance
+from create_model import create_model, load_model_no_train_from_pytorch
 
 class Losses():
     gaussian = nn.GaussianNLLLoss(full=True, reduction='none')
@@ -27,6 +34,7 @@ class Losses():
         num_classes = num_classes.shape[0] if torch.is_tensor(num_classes) else num_classes
         return nn.CrossEntropyLoss(reduction='none', weight=torch.ones(num_classes))
     bce = nn.BCEWithLogitsLoss(reduction='none')
+    
 
 
 
@@ -35,57 +43,22 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
           y_encoder_generator=None, pos_encoder_generator=None, decoder=None, extra_prior_kwargs_dict={}, scheduler=get_cosine_schedule_with_warmup,
           load_weights_from_this_state_dict=None, validation_period=10, single_eval_pos_gen=None, bptt_extra_samples=None, gpu_device='cuda:0',
           aggregate_k_gradients=1, verbose=True, style_encoder_generator=None, epoch_callback=None,
-          initializer=None, initialize_with_model=None, train_mixed_precision=False, efficient_eval_masking=True, **model_extra_args
+          initializer=None, initialize_with_model=None, train_mixed_precision=False, efficient_eval_masking=True, use_wandb=False, name="default", save_every=20, **model_extra_args
           ):
-    device = gpu_device if torch.cuda.is_available() else 'cpu:0'
-    print(f'Using {device} device')
+    
+    model, dl, device, n_out = create_model(priordataloader_class, criterion, encoder_generator, emsize, nhid, nlayers, nhead, dropout,
+                                                       epochs, steps_per_epoch, batch_size, bptt, lr, weight_decay, warmup_epochs, input_normalization,
+                                                       y_encoder_generator, pos_encoder_generator, decoder, extra_prior_kwargs_dict, scheduler,
+                                                       load_weights_from_this_state_dict, validation_period, single_eval_pos_gen, bptt_extra_samples, gpu_device,
+                                                       aggregate_k_gradients, verbose, style_encoder_generator, epoch_callback,
+                                                       initializer, initialize_with_model, train_mixed_precision, efficient_eval_masking, use_wandb, name, save_every, **model_extra_args)
     using_dist, rank, device = init_dist(device)
-    single_eval_pos_gen = single_eval_pos_gen if callable(single_eval_pos_gen) else lambda: single_eval_pos_gen
-
-    def eval_pos_seq_len_sampler():
-        single_eval_pos = single_eval_pos_gen()
-        if bptt_extra_samples:
-            return single_eval_pos, single_eval_pos + bptt_extra_samples
-        else:
-            return single_eval_pos, bptt
-    dl = priordataloader_class(num_steps=steps_per_epoch, batch_size=batch_size, eval_pos_seq_len_sampler=eval_pos_seq_len_sampler, seq_len_maximum=bptt+(bptt_extra_samples if bptt_extra_samples else 0), device=device, **extra_prior_kwargs_dict)
-
-    encoder = encoder_generator(dl.num_features, emsize)
-    #style_def = dl.get_test_batch()[0][0] # the style in batch of the form ((style, x, y), target, single_eval_pos)
-    style_def = None
-    #print(f'Style definition of first 3 examples: {style_def[:3] if style_def is not None else None}')
-    style_encoder = style_encoder_generator(style_def.shape[1], emsize) if (style_def is not None) else None
-    if isinstance(criterion, nn.GaussianNLLLoss):
-        n_out = 2
-    elif isinstance(criterion, nn.CrossEntropyLoss):
-        n_out = criterion.weight.shape[0]
-    else:
-        n_out = 1
-
-    model = TransformerModel(encoder, n_out, emsize, nhead, nhid, nlayers, dropout, style_encoder=style_encoder,
-                             y_encoder=y_encoder_generator(1, emsize), input_normalization=input_normalization,
-                             pos_encoder=(pos_encoder_generator or positional_encodings.NoPositionalEncoding)(emsize, bptt*2),
-                             decoder=decoder, init_method=initializer, efficient_eval_masking=efficient_eval_masking, **model_extra_args
-                             )
-    model.criterion = criterion
-    if load_weights_from_this_state_dict is not None:
-        model.load_state_dict(load_weights_from_this_state_dict)
-    if initialize_with_model is not None:
-        model.init_from_small_model(initialize_with_model)
-
-    print(f"Using a Transformer with {sum(p.numel() for p in model.parameters())/1000/1000:.{2}f} M parameters")
-
-    try:
-        for (k, v), (k2, v2) in zip(model.state_dict().items(), initialize_with_model.state_dict().items()):
-            print(k, ((v - v2) / v).abs().mean(), v.shape)
-    except Exception:
-        pass
-
-    model.to(device)
+    print("Using distributed training:", using_dist)
     if using_dist:
         print("Distributed training")
         model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[rank], output_device=rank, broadcast_buffers=False)
     dl.model = model
+    
 
 
     # learning rate
@@ -99,7 +72,7 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
 
     # check that everything uses up-to-date APIs
     utils.check_compatibility(dl)
-
+    
     def train_epoch():
         model.train()  # Turn on the train mode
         total_loss = 0.
@@ -109,7 +82,8 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
         ignore_steps = 0
         before_get_batch = time.time()
         assert len(dl) % aggregate_k_gradients == 0, 'Please set the number of steps per epoch s.t. `aggregate_k_gradients` divides it.'
-        for batch, (data, targets, single_eval_pos) in enumerate(dl):
+        pbar = tqdm(enumerate(dl))
+        for batch, (data, targets, single_eval_pos) in pbar:
             if using_dist and not (batch % aggregate_k_gradients == aggregate_k_gradients - 1):
                 cm = model.no_sync()
             else:
@@ -124,6 +98,7 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
 
                 with autocast(enabled=scaler is not None):
                     # If style is set to None, it should not be transferred to device
+                    
                     output = model(tuple(e.to(device) if torch.is_tensor(e) else e for e in data) if isinstance(data, tuple) else data.to(device)
                                    , single_eval_pos=single_eval_pos)
 
@@ -166,8 +141,13 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
 
                 step_time = time.time() - before_forward
 
+                pbar.set_description(f"Loss: {loss.item():.4f}, nan_share: {nan_share:.4f}, ignore_steps: {ignore_steps}, nan_steps: {nan_steps}")
+
                 if not torch.isnan(loss):
                     total_loss += losses.mean().cpu().detach().item()
+                    if batch % 20 == 0:
+                        print("Batch loss: ", losses.mean().cpu().detach().item())
+                        print(f"Batch {batch} took {step_time:.{2}f}s to process, {time_to_get_batch:.{2}f}s to get batch, {forward_time:.{2}f}s to forward")
                     total_positional_losses += losses.mean(1).cpu().detach() if single_eval_pos is None else \
                         nn.functional.one_hot(torch.tensor(single_eval_pos), bptt)*\
                         losses[:bptt-single_eval_pos].mean().cpu().detach()
@@ -175,10 +155,12 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
                     total_positional_losses_recorded += torch.ones(bptt) if single_eval_pos is None else \
                         nn.functional.one_hot(torch.tensor(single_eval_pos), bptt)
                 nan_steps += nan_share
+
                 ignore_steps += (targets == -100).float().mean()
 
 
             before_get_batch = time.time()
+        print("Epoch Loss", total_loss / steps_per_epoch)
         return total_loss / steps_per_epoch, (total_positional_losses / total_positional_losses_recorded).tolist(),\
                time_to_get_batch, forward_time, step_time, nan_steps.cpu().item()/(batch+1),\
                ignore_steps.cpu().item()/(batch+1)
@@ -197,6 +179,33 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
             else:
                 val_score = None
 
+            if use_wandb and rank == 0:
+                model_sklearn = TabPFNClassifier(no_preprocess_mode=True, device=device)
+                model_pytorch = load_model_no_train_from_pytorch(model, config_sample=model_sklearn.c)[0]
+                model_sklearn.model = model_pytorch
+                try:
+                    measure_on_datasets = get_validation_performance(model_sklearn)
+                except:
+                    print("Failed to get validation performance")
+                    measure_on_datasets = {}
+                wandb.log({
+                    "epoch": epoch,
+                    "train_loss": total_loss,
+                    "val_loss": val_score,
+                    "lr": optimizer.param_groups[0]['lr'],
+                    "time_to_get_batch": time_to_get_batch,
+                    "forward_time": forward_time,
+                    "step_time": step_time,
+                    "nan_share": nan_share,
+                    "ignore_share": ignore_share,
+                    **measure_on_datasets
+                })
+            
+            if epoch % save_every == 0 and epoch > 0:
+                # Save model
+                torch.save(model.state_dict(), f"./model_checkpoints/model_{name}_{epoch}.pt")
+                print(f"Saved model_{epoch}.pt")
+
             if verbose:
                 print('-' * 89)
                 print(
@@ -207,6 +216,8 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
                     f' nan share {nan_share:5.2f} ignore share (for classification tasks) {ignore_share:5.4f}'
                     + (f'val score {val_score}' if val_score is not None else ''))
                 print('-' * 89)
+
+
 
             # stepping with wallclock time based scheduler
             if epoch_callback is not None and rank == 0:

@@ -74,9 +74,9 @@ def plot_features(data, targets, fig=None, categorical=True):
             sub_ax.set_yticks([])
             if d == d2:
                 if categorical:
-                    sns.kdeplot(data[:, d],hue=targets[:],ax=sub_ax,legend=False, palette="deep")
+                    sns.kdeplot(x=data[:, d],hue=targets[:],ax=sub_ax,legend=False, palette="deep")
                 else:
-                    sns.kdeplot(data[:, d], ax=sub_ax, legend=False)
+                    sns.kdeplot(x=data[:, d], ax=sub_ax, legend=False)
                 sub_ax.set(ylabel=None)
             else:
                 if categorical:

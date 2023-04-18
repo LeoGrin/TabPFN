@@ -1,82 +1,104 @@
-from functools import partial
-from tabpfn.train import train, Losses
+import os
+import itertools
+import argparse
+import time
+import datetime
+import yaml
+from contextlib import nullcontext
+
+
+import torch
+from torch import nn
+
+import tabpfn.utils as utils
+from tabpfn.transformer import TransformerModel
+from tabpfn.utils import get_cosine_schedule_with_warmup, get_openai_lr, StoreDictKeyPair, get_weighted_single_eval_pos_sampler, get_uniform_single_eval_pos_sampler
 import tabpfn.priors as priors
 import tabpfn.encoders as encoders
-
+import tabpfn.positional_encodings as positional_encodings
+from tabpfn.utils import init_dist
+from torch.cuda.amp import autocast, GradScaler
+from torch import nn
+import wandb
+import time
+from tqdm import tqdm
+import openml
+import math
+from functools import partial
 from tabpfn.priors.utils import trunc_norm_sampler_f, gamma_sampler_f
 from tabpfn.utils import get_uniform_single_eval_pos_sampler
-import torch
-import math
-
-def save_model(model, path, filename, config_sample):
-    config_sample = {**config_sample}
-
-    def make_serializable(config_sample):
-        if isinstance(config_sample, dict):
-            config_sample = {k: make_serializable(config_sample[k]) for k in config_sample}
-        if isinstance(config_sample, list):
-            config_sample = [make_serializable(v) for v in config_sample]
-        if callable(config_sample):
-            config_sample = str(config_sample)
-        return config_sample
-
-    #if 'num_features_used' in config_sample:
-    #    del config_sample['num_features_used']
-
-    #config_sample['num_classes_as_str'] = str(config_sample['num_classes'])
-    #del config_sample['num_classes']
-
-    config_sample = make_serializable(config_sample)
-
-    torch.save((model.state_dict(), None, config_sample), os.path.join(path, filename))
 
 
-import subprocess as sp
-import os
 
-def get_gpu_memory():
-    command = "nvidia-smi"
-    memory_free_info = sp.check_output(command.split()).decode('ascii')
-    return memory_free_info
+class Losses():
+    gaussian = nn.GaussianNLLLoss(full=True, reduction='none')
+    mse = nn.MSELoss(reduction='none')
+    def ce(num_classes):
+        num_classes = num_classes.shape[0] if torch.is_tensor(num_classes) else num_classes
+        return nn.CrossEntropyLoss(reduction='none', weight=torch.ones(num_classes))
+    bce = nn.BCEWithLogitsLoss(reduction='none')
+    
 
+def create_model(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=200, nlayers=6, nhead=2, dropout=0.0,
+          epochs=10, steps_per_epoch=100, batch_size=200, bptt=10, lr=None, weight_decay=0.0, warmup_epochs=10, input_normalization=False,
+          y_encoder_generator=None, pos_encoder_generator=None, decoder=None, extra_prior_kwargs_dict={}, scheduler=get_cosine_schedule_with_warmup,
+          load_weights_from_this_state_dict=None, validation_period=10, single_eval_pos_gen=None, bptt_extra_samples=None, gpu_device='cuda:0',
+          aggregate_k_gradients=1, verbose=True, style_encoder_generator=None, epoch_callback=None,
+          initializer=None, initialize_with_model=None, train_mixed_precision=False, efficient_eval_masking=True, use_wandb=False, name="default", save_every=20, **model_extra_args
+          ):
 
-def load_model(path, filename, device, eval_positions, verbose):
-    # TODO: This function only restores evaluation functionality but training canät be continued. It is also not flexible.
-    # print('Loading....')
-    model_state, optimizer_state, config_sample = torch.load(
-        os.path.join(path, filename), map_location='cpu')
-    if ('differentiable_hyperparameters' in config_sample
-            and 'prior_mlp_activations' in config_sample['differentiable_hyperparameters']):
-        config_sample['differentiable_hyperparameters']['prior_mlp_activations']['choice_values_used'] = config_sample[
-                                                                                                         'differentiable_hyperparameters'][
-                                                                                                         'prior_mlp_activations'][
-                                                                                                         'choice_values']
-        config_sample['differentiable_hyperparameters']['prior_mlp_activations']['choice_values'] = [
-            torch.nn.Tanh for k in config_sample['differentiable_hyperparameters']['prior_mlp_activations']['choice_values']]
+    print(model_extra_args)
+    print(wandb)
+    device = gpu_device if torch.cuda.is_available() else 'cpu:0'
+    print(f'Using {device} device')
+    #print(f'Using {torch.cuda.device_count()} GPUs')
+    # batch size
+    print(f"Batch size: {batch_size}")
+    single_eval_pos_gen = single_eval_pos_gen if callable(single_eval_pos_gen) else lambda: single_eval_pos_gen
 
-    config_sample['categorical_features_sampler'] = lambda: lambda x: ([], [], [])
-    config_sample['num_features_used_in_training'] = config_sample['num_features_used']
-    config_sample['num_features_used'] = lambda: config_sample['num_features']
-    config_sample['num_classes_in_training'] = config_sample['num_classes']
-    config_sample['num_classes'] = 2
-    config_sample['batch_size_in_training'] = config_sample['batch_size']
-    config_sample['batch_size'] = 1
-    config_sample['bptt_in_training'] = config_sample['bptt']
-    config_sample['bptt'] = 10
-    config_sample['bptt_extra_samples_in_training'] = config_sample['bptt_extra_samples']
-    config_sample['bptt_extra_samples'] = None
+    def eval_pos_seq_len_sampler():
+        single_eval_pos = single_eval_pos_gen()
+        if bptt_extra_samples:
+            return single_eval_pos, single_eval_pos + bptt_extra_samples
+        else:
+            return single_eval_pos, bptt
+    dl = priordataloader_class(num_steps=steps_per_epoch, batch_size=batch_size, eval_pos_seq_len_sampler=eval_pos_seq_len_sampler, seq_len_maximum=bptt+(bptt_extra_samples if bptt_extra_samples else 0), device=device, **extra_prior_kwargs_dict)
 
-    #print('Memory', str(get_gpu_memory()))
+    encoder = encoder_generator(dl.num_features, emsize)
+    #style_def = dl.get_test_batch()[0][0] # the style in batch of the form ((style, x, y), target, single_eval_pos)
+    style_def = None
+    #print(f'Style definition of first 3 examples: {style_def[:3] if style_def is not None else None}')
+    style_encoder = style_encoder_generator(style_def.shape[1], emsize) if (style_def is not None) else None
+    if isinstance(criterion, nn.GaussianNLLLoss):
+        n_out = 2
+    elif isinstance(criterion, nn.CrossEntropyLoss):
+        n_out = criterion.weight.shape[0]
+    else:
+        n_out = 1
 
-    model = get_model(config_sample, device=device, should_train=False, verbose=verbose)
-    module_prefix = 'module.'
-    model_state = {k.replace(module_prefix, ''): v for k, v in model_state.items()}
-    model[2].load_state_dict(model_state)
-    model[2].to(device)
-    model[2].eval()
+    model = TransformerModel(encoder, n_out, emsize, nhead, nhid, nlayers, dropout, style_encoder=style_encoder,
+                             y_encoder=y_encoder_generator(1, emsize), input_normalization=input_normalization,
+                             pos_encoder=(pos_encoder_generator or positional_encodings.NoPositionalEncoding)(emsize, bptt*2),
+                             decoder=decoder, init_method=initializer, efficient_eval_masking=efficient_eval_masking, **model_extra_args
+                             )
+    model.criterion = criterion
+    if load_weights_from_this_state_dict is not None:
+        model.load_state_dict(load_weights_from_this_state_dict)
+    if initialize_with_model is not None:
+        model.init_from_small_model(initialize_with_model)
 
-    return model, config_sample
+    print(f"Using a Transformer with {sum(p.numel() for p in model.parameters())/1000/1000:.{2}f} M parameters")
 
+    try:
+        for (k, v), (k2, v2) in zip(model.state_dict().items(), initialize_with_model.state_dict().items()):
+            print(k, ((v - v2) / v).abs().mean(), v.shape)
+    except Exception:
+        pass
+
+    model.to(device)
+    
+    return model, dl, device, n_out
+    
 def fix_loaded_config_sample(loaded_config_sample, config):
     def copy_to_sample(*k):
         t,s = loaded_config_sample, config
@@ -88,6 +110,7 @@ def fix_loaded_config_sample(loaded_config_sample, config):
     copy_to_sample('num_classes')
     copy_to_sample('differentiable_hyperparameters','prior_mlp_activations','choice_values')
 
+    
 def load_config_sample(path, template_config):
     model_state, optimizer_state, loaded_config_sample = torch.load(path, map_location='cpu')
     fix_loaded_config_sample(loaded_config_sample, template_config)
@@ -151,7 +174,23 @@ def get_meta_gp_prior_hyperparameters(config):
     return config
 
 
-def get_model(config, device, should_train=True, verbose=False, state_dict=None, epoch_callback=None):
+def _parse_args(config_parser, parser):
+    # Do we have a config file to parse?
+    args_config, remaining = config_parser.parse_known_args()
+    if args_config.config:
+        with open(args_config.config, 'r') as f:
+            cfg = yaml.safe_load(f)
+            parser.set_defaults(**cfg)
+
+    # The main arg parser parses the rest of the args, the usual
+    # defaults will have been overridden if config file specified.
+    args = parser.parse_args(remaining)
+
+    # Cache the args as a text string to save them in the output dir later
+    args_text = yaml.safe_dump(args.__dict__, default_flow_style=False)
+    return args, args_text
+
+def get_model_no_train(config, device, should_train=True, verbose=False, state_dict=None, epoch_callback=None):
     extra_kwargs = {}
     verbose_train, verbose_prior = verbose >= 1, verbose >= 2
     config['verbose'] = verbose_prior
@@ -259,7 +298,7 @@ def get_model(config, device, should_train=True, verbose=False, state_dict=None,
 
     epochs = 0 if not should_train else config['epochs']
     #print('MODEL BUILDER', model_proto, extra_kwargs['get_batch'])
-    model = train(model_proto.DataLoader
+    model = create_model(model_proto.DataLoader
                 , loss
                 , encoder
                 , name = config['name']
@@ -295,6 +334,85 @@ def get_model(config, device, should_train=True, verbose=False, state_dict=None,
         }
                 , lr=config['lr']
                 , verbose=verbose_train,
-                weight_decay=config.get('weight_decay', 0.0))
+                weight_decay=config.get('weight_decay', 0.0))[0]
 
-    return model
+    #return total_loss, total_positional_losses, model.to('cpu'), dl
+    # imitate train function return values
+    return 0, 0, model.to('cpu'), None
+
+def load_model_no_train(path, filename, device, config_sample=None, verbose=0):
+    # TODO: This function only restores evaluation functionality but training canät be continued. It is also not flexible.
+    # print('Loading....')
+    loaded_data = torch.load(
+        os.path.join(path, filename), map_location='cpu')
+    if len(loaded_data) == 3:
+        model_state, optimizer_state, config_sample = loaded_data
+    else:
+        model_state = loaded_data
+    if ('differentiable_hyperparameters' in config_sample
+            and 'prior_mlp_activations' in config_sample['differentiable_hyperparameters']):
+        config_sample['differentiable_hyperparameters']['prior_mlp_activations']['choice_values_used'] = config_sample[
+                                                                                                         'differentiable_hyperparameters'][
+                                                                                                         'prior_mlp_activations'][
+                                                                                                         'choice_values']
+        config_sample['differentiable_hyperparameters']['prior_mlp_activations']['choice_values'] = [
+            torch.nn.Tanh for k in config_sample['differentiable_hyperparameters']['prior_mlp_activations']['choice_values']]
+
+    config_sample['categorical_features_sampler'] = lambda: lambda x: ([], [], [])
+    config_sample['num_features_used_in_training'] = config_sample['num_features_used']
+    config_sample['num_features_used'] = lambda: config_sample['num_features']
+    config_sample['num_classes_in_training'] = config_sample['num_classes']
+    config_sample['num_classes'] = 2
+    config_sample['batch_size_in_training'] = config_sample['batch_size']
+    config_sample['batch_size'] = 1
+    config_sample['bptt_in_training'] = config_sample['bptt']
+    config_sample['bptt'] = 10
+    config_sample['bptt_extra_samples_in_training'] = config_sample['bptt_extra_samples']
+    config_sample['bptt_extra_samples'] = None
+
+    #print('Memory', str(get_gpu_memory()))
+
+    model = get_model_no_train(config_sample, device=device, should_train=False, verbose=verbose)
+    module_prefix = 'module.'
+    model_state = {k.replace(module_prefix, ''): v for k, v in model_state.items()}
+    model[2].load_state_dict(model_state)
+    model[2].to(device)
+    model[2].eval()
+
+    return model, config_sample
+
+def load_model_no_train_from_pytorch(model, config_sample):
+    # TODO: This function only restores evaluation functionality but training canät be continued. It is also not flexible.
+    # print('Loading....')
+    #print('Memory', str(get_gpu_memory()))
+    import copy
+    model_ = copy.deepcopy(model)
+    
+    if ('differentiable_hyperparameters' in config_sample and 'prior_mlp_activations' in config_sample['differentiable_hyperparameters']):
+        config_sample['differentiable_hyperparameters']['prior_mlp_activations']['choice_values_used'] = config_sample[
+                                                                                                        'differentiable_hyperparameters'][
+                                                                                                        'prior_mlp_activations'][
+                                                                                                        'choice_values']
+        config_sample['differentiable_hyperparameters']['prior_mlp_activations']['choice_values'] = [
+            torch.nn.Tanh for k in config_sample['differentiable_hyperparameters']['prior_mlp_activations']['choice_values']]
+
+    config_sample['categorical_features_sampler'] = lambda: lambda x: ([], [], [])
+    config_sample['num_features_used_in_training'] = config_sample['num_features_used']
+    config_sample['num_features_used'] = lambda: config_sample['num_features']
+    config_sample['num_classes_in_training'] = config_sample['num_classes']
+    config_sample['num_classes'] = 2
+    config_sample['batch_size_in_training'] = config_sample['batch_size']
+    config_sample['batch_size'] = 1
+    config_sample['bptt_in_training'] = config_sample['bptt']
+    config_sample['bptt'] = 10 #WHY
+    config_sample['bptt_extra_samples_in_training'] = config_sample['bptt_extra_samples']
+    config_sample['bptt_extra_samples'] = None
+
+    model = 0, 0, model_, None
+    module_prefix = 'module.'
+    model_state = {k.replace(module_prefix, ''): v for k, v in model[2].state_dict().items()}
+    model[2].load_state_dict(model_state)
+    #model[2].to(device)
+    model[2].eval()
+
+    return model, config_sample

@@ -17,10 +17,12 @@ from sklearn.utils.multiclass import unique_labels
 from sklearn.utils.multiclass import check_classification_targets
 from sklearn.utils import column_or_1d
 from pathlib import Path
-from tabpfn.scripts.model_builder import load_model
+#from tabpfn.scripts.model_builder import load_model
+from create_model import load_model_no_train
 import os
 import pickle
 import io
+
 
 class CustomUnpickler(pickle.Unpickler):
     def find_class(self, module, name):
@@ -89,7 +91,7 @@ def load_model_workflow(i, e, add_name, base_path, device='cpu', eval_addition='
 
     #print(f'Loading {model_file}')
 
-    model, c = load_model(base_path, model_file, device, eval_positions=[], verbose=False)
+    model, c = load_model_no_train(base_path, model_file, device, verbose=False)
 
     return model, c, results_file
 
@@ -189,6 +191,10 @@ class TabPFNClassifier(BaseEstimator, ClassifierMixin):
         y_full = torch.tensor(y_full, device=self.device).float().unsqueeze(1)
 
         eval_pos = self.X_.shape[0]
+        print("interface")
+        print(X_full.shape)
+        print(y_full.shape)
+        print(eval_pos)
 
         prediction = transformer_predict(self.model[2], X_full, y_full, eval_pos,
                                          device=self.device,

@@ -7,6 +7,8 @@ import numpy as np
 
 from tabpfn.utils import default_device
 from .utils import get_batch_to_dataloader
+from sklearn.ensemble import ExtraTreesRegressor
+
 
 class GaussianNoise(nn.Module):
     def __init__(self, std, device):
@@ -16,6 +18,39 @@ class GaussianNoise(nn.Module):
 
     def forward(self, x):
         return x + torch.normal(torch.zeros_like(x), self.std)
+
+class ForestTransform(nn.Module):
+    def __init__(self, max_depth, n_estimators, out_dim, device=default_device):
+        super().__init__()
+        self.max_depth = max_depth
+        self.n_estimators = n_estimators
+        self.device = device
+        self.forest_list = [ExtraTreesRegressor(max_depth=max_depth, n_estimators=n_estimators, max_features=1, n_jobs=50) for _ in range(out_dim)]# max_features=1 means that the splits are totally random
+        #TODO make it faster
+        self.out_dim = out_dim
+
+    def forward(self, x):
+        # Generate random normals
+        random_labels = np.random.randn(x.shape[0], self.out_dim)
+        # Iterate along the batch dimension
+        # For each sample, fit the forest to the random labels
+        # Then, use the forest to predict the labels of the sample
+        #assert x.shape[1] == 1
+        result = np.zeros((x.shape[0], 1, self.out_dim))
+        input = x.reshape(x.shape[0], x.shape[2]).detach().cpu().numpy()
+        # remove nans
+        input = input[~np.isnan(input).any(axis=1)]
+        for i, forest in enumerate(self.forest_list):
+            forest.fit(input, random_labels[:, i])
+            prediction = forest.predict(input).reshape(x.shape[0], 1, 1)
+            result[:, :, i] = prediction.reshape(-1, 1)
+        print("------------------")
+        print(x.shape)
+        print(self.out_dim)
+        print(result.shape)
+        return torch.tensor(result, device=self.device).float()
+        
+
 
 
 def causes_sampler_f(num_causes):
@@ -32,9 +67,9 @@ def get_batch(batch_size, seq_len, num_features, hyperparameters, device=default
         s = hyperparameters['prior_mlp_activations']()
         hyperparameters['prior_mlp_activations'] = lambda : s
 
-    class MLP(torch.nn.Module):
+    class MLPTrees(torch.nn.Module):
         def __init__(self, hyperparameters):
-            super(MLP, self).__init__()
+            super(MLPTrees, self).__init__()
 
             with torch.no_grad():
 
@@ -52,7 +87,6 @@ def get_batch(batch_size, seq_len, num_features, hyperparameters, device=default
                     self.prior_mlp_hidden_dim = max(self.prior_mlp_hidden_dim, num_outputs + 2 * num_features)
                 else:
                     self.num_causes = num_features
-                
 
                 # This means that the mean and standard deviation of each cause is determined in advance
                 if self.pre_sample_causes:
@@ -67,13 +101,17 @@ def get_batch(batch_size, seq_len, num_features, hyperparameters, device=default
                     # torch.abs(torch.normal(torch.zeros((out_dim)), self.noise_std)) - Change std for each dimension?
                     noise = (GaussianNoise(torch.abs(torch.normal(torch.zeros(size=(1, out_dim), device=device), float(self.noise_std))), device=device)
                          if self.pre_sample_weights else GaussianNoise(float(self.noise_std), device=device))
+                    max_depth = 2 + int(np.random.exponential(hyperparameters['max_depth_lambda']))
+                    n_estimators = 1 + int(np.random.exponential(hyperparameters['n_estimators_lambda']))
                     return [
-                        nn.Sequential(*[self.prior_mlp_activations()
-                            , nn.Linear(self.prior_mlp_hidden_dim, out_dim)
+                        nn.Sequential(*[ForestTransform(max_depth=max_depth, n_estimators=n_estimators, out_dim=self.prior_mlp_hidden_dim, device=device)
                             , noise])
                     ]
 
-                self.layers = [nn.Linear(self.num_causes, self.prior_mlp_hidden_dim, device=device)]
+                #self.layers = [nn.Linear(self.num_causes, self.prior_mlp_hidden_dim, device=device)]
+                max_depth = 2 + int(np.random.exponential(hyperparameters['max_depth_lambda']))
+                n_estimators = 1 + int(np.random.exponential(hyperparameters['n_estimators_lambda']))
+                self.layers = [ForestTransform(max_depth=max_depth, n_estimators=n_estimators, out_dim=self.prior_mlp_hidden_dim, device=device)]
                 self.layers += [module for layer_idx in range(self.num_layers-1) for module in generate_module(layer_idx, self.prior_mlp_hidden_dim)]
                 if not self.is_causal:
                     self.layers += generate_module(-1, num_outputs)
@@ -81,6 +119,7 @@ def get_batch(batch_size, seq_len, num_features, hyperparameters, device=default
 
                 # Initialize Model parameters
                 for i, (n, p) in enumerate(self.layers.named_parameters()):
+                    print(n)
                     if self.block_wise_dropout:
                         if len(p.shape) == 2: # Only apply to weight matrices and not bias
                             nn.init.zeros_(p)
@@ -139,11 +178,11 @@ def get_batch(batch_size, seq_len, num_features, hyperparameters, device=default
                 outputs_flat = torch.cat(outputs, -1)
 
                 if self.in_clique:
-                    # print('In clique')
-                    # print("outputs_flat.shape[-1]", outputs_flat.shape[-1])
-                    # print("num_outputs", num_outputs)
-                    # print("num_features", num_features)
-                    # print("---")
+                    print('In clique')
+                    print("outputs_flat.shape[-1]", outputs_flat.shape[-1])
+                    print("num_outputs", num_outputs)
+                    print("num_features", num_features)
+                    print("---")
                     random_perm = random.randint(0, outputs_flat.shape[-1] - num_outputs - num_features) + torch.randperm(num_outputs + num_features, device=device)
                 else:
                     random_perm = torch.randperm(outputs_flat.shape[-1]-1, device=device)
@@ -170,14 +209,14 @@ def get_batch(batch_size, seq_len, num_features, hyperparameters, device=default
                 y[:] = -100 # default ignore index for CE
 
             # random feature rotation
-            if self.random_feature_rotation:
-                x = x[..., (torch.arange(x.shape[-1], device=device)+random.randrange(x.shape[-1])) % x.shape[-1]]
+            # if self.random_feature_rotation:
+            #     x = x[..., (torch.arange(x.shape[-1], device=device)+random.randrange(x.shape[-1])) % x.shape[-1]] #TODO put it back?
             return x, y
 
     if hyperparameters.get('new_mlp_per_example', False):
-        get_model = lambda: MLP(hyperparameters).to(device)
+        get_model = lambda: MLPTrees(hyperparameters).to(device)
     else:
-        model = MLP(hyperparameters).to(device)
+        model = MLPTrees(hyperparameters).to(device)
         get_model = lambda: model
 
     sample = [get_model()() for _ in range(0, batch_size)]
@@ -185,6 +224,8 @@ def get_batch(batch_size, seq_len, num_features, hyperparameters, device=default
     x, y = zip(*sample)
     y = torch.cat(y, 1).detach().squeeze(2)
     x = torch.cat(x, 1).detach()
+
+    print("Shapes", x.shape, y.shape)
 
     return x, y, y
 

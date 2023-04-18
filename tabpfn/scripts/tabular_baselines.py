@@ -3,7 +3,7 @@ tabpfn_path = '../../'
 sys.path.insert(0, tabpfn_path)
 
 import pandas
-from catboost import CatBoostClassifier, Pool
+#from catboost import CatBoostClassifier, Pool
 from sklearn.model_selection import GridSearchCV
 from sklearn.model_selection import KFold
 from sklearn.model_selection import ParameterGrid
@@ -26,7 +26,7 @@ from sklearn import neighbors
 from sklearn.gaussian_process import GaussianProcessClassifier
 from sklearn.gaussian_process.kernels import RBF
 import numpy as np
-np.warnings.filterwarnings('ignore', category=np.VisibleDeprecationWarning) 
+#np.warnings.filterwarnings('ignore', category=np.VisibleDeprecationWarning) 
 
 import torch
 import itertools
@@ -1249,7 +1249,7 @@ def catboost_metric(x, y, test_x, test_y, cat_features, metric_used, max_time=30
         test_x[:, cat_features], -1)
     
     if gpu_id is not None:
-         gpu_params = {task_type="GPU", devices=gpu_id}
+         gpu_params = {task_type:"GPU", devices:gpu_id}
 
     def make_pd_from_np(x):
         data = pd.DataFrame(x)
@@ -1307,7 +1307,7 @@ def xgb_metric(x, y, test_x, test_y, cat_features, metric_used, max_time=300, no
     # XGB handles missing values appropriately without imputation
     
     if gpu_id is not None:
-         gpu_params = {tree_method='gpu_hist', gpu_id=gpu_id}
+         gpu_params = {tree_method:'gpu_hist', gpu_id:gpu_id}
 
     x, y, test_x, test_y = preprocess_impute(x, y, test_x, test_y
                                              , one_hot=False
