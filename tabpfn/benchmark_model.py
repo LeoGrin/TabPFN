@@ -184,6 +184,7 @@ def get_benchmark_performance(model, metric="accuracy", suites=[337, 334, "cc18"
         else:
             results_baselines = {}
         accepted_tasks = []
+        #suite_id = str(suite_id) + "_large"
         for task_id in tasks:
             for seed in range(n_iter):
                 print("Task id: {}".format(task_id))
@@ -220,14 +221,25 @@ def get_benchmark_performance(model, metric="accuracy", suites=[337, 334, "cc18"
                 # with cross validation
                 # Create a cross-validation object
                 #TODO change when not using my benchmark
+                # X_train, X_test, y_train, y_test = sklearn.model_selection.train_test_split(X, y, random_state=rng)
+                # if X_train.shape[0] > 10000:
+                #     indices = rng.choice(X_train.shape[0], 10000, replace=False)
+                #     X_train = X_train[indices]
+                #     y_train = y_train[indices]
+                # if X_test.shape[0] > 10000:
+                #     indices = rng.choice(X_test.shape[0], 10000, replace=False)
+                #     X_test = X_test[indices]
+                #     y_test = y_test[indices]
+                # print("X_train", X_train.shape)
                 if len(X) > 1300:
                     X_train, X_test, y_train, y_test = sklearn.model_selection.train_test_split(X, y, train_size=1024, random_state=rng)
                 else:
                     X_train, X_test, y_train, y_test = sklearn.model_selection.train_test_split(X, y, random_state=rng)
-                # Evaluate the model by computing the accuracy
-                model.fit(X_train, y_train)
+                #Evaluate the model by computing the accuracy
+                model.fit(X_train, y_train, overwrite_warning=True)
                 y_pred = model.predict(X_test)
                 score = accuracy_score(y_test, y_pred)
+                print("accuracy", score)
                 res = pd.concat([res, pd.DataFrame({"suite_id": [suite_id], "task_id": [task_id], "seed": [seed], "metric": ["accuracy"], "value": [score]})])
                 y_pred_proba = model.predict_proba(X_test)
                 if y_pred_proba.shape[1] == 2:
@@ -243,15 +255,16 @@ def get_benchmark_performance(model, metric="accuracy", suites=[337, 334, "cc18"
     return res
 
 if __name__ == """__main__""":
-    device = "cuda:0"
-    #checkpoint = "trees13368_60"
-    #model = TabPFNClassifier(device=device)#no_preprocess_mode=True, device=device)
-    model = GradientBoostingClassifier()
-    #model_pytorch = load_model_no_train("model_checkpoints", f"model_{checkpoint}.pt", 0, model.c, 0)[0]
-    #model.model = model_pytorch
-    res = get_benchmark_performance(model, model_name="gbt", one_hot_encoding=True)
+    device = "cuda:3"
+    checkpoint = "trees24451_220"
+    model = TabPFNClassifier(device=device)#, no_preprocess_mode=True)
+    #model = GradientBoostingClassifier()
+    model_pytorch = load_model_no_train("model_checkpoints", f"model_{checkpoint}.pt", 0, model.c, 0)[0]
+    model.model = model_pytorch
+    res = get_benchmark_performance(model, model_name="tabpfn", one_hot_encoding=False,)
     #model_name = f"tabpfn_{checkpoint}"
-    model_name = "gbt"
+    #model_name = checkpoint
+    model_name = checkpoint
     print(res)
     res["model"] = model_name
     results = pd.read_csv("results_benchmark.csv")
