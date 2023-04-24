@@ -143,6 +143,9 @@ class FlexibleCategorical(torch.nn.Module):
     def forward(self, batch_size):
         start = time.time()
         x, y, y_ = self.get_batch(hyperparameters=self.h, **self.args_passed)
+        #print("Original", x.shape, y.shape, y_.shape)
+        #print("Original x", x)
+        #print("Original y", y)
         if time_it:
             print('Flex Forward Block 1', round(time.time() - start, 3))
 
@@ -178,14 +181,17 @@ class FlexibleCategorical(torch.nn.Module):
             x = to_ranking_low_mem(x)
         else:
             x = remove_outliers(x)
-        x, y = normalize_data(x), normalize_data(y)
+        #x, y = normalize_data(x), normalize_data(y)
+        x = normalize_data(x)
 
         if time_it:
             print('Flex Forward Block 3', round(time.time() - start, 3))
             start = time.time()
 
         # Cast to classification if enabled
-        y = self.class_assigner(y).float()
+        #y = self.class_assigner(y).float()
+        
+
 
         if time_it:
             print('Flex Forward Block 4', round(time.time() - start, 3))
@@ -239,6 +245,11 @@ class FlexibleCategorical(torch.nn.Module):
                     assert num_classes == num_classes_float.item()
                     random_shift = torch.randint(0, num_classes, (1,), device=self.args['device'])
                     y[valid_labels, b] = (y[valid_labels, b] + random_shift) % num_classes
+        
+        #print("Transform 4", x.shape, y.shape, y_.shape)
+        #print("Transform 4", x)
+        #print("Transform 4", y)
+        #print("-----------------")
 
         return x, y, y  # x.shape = (T,B,H)
 

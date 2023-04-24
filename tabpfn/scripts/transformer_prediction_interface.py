@@ -239,6 +239,7 @@ class TabPFNClassifier(BaseEstimator, ClassifierMixin):
         If no_grad is true in the classifier the function takes X as a numpy.ndarray. If no_grad is false X must be a
         torch tensor and is not fully checked.
         """
+        print("X.shape", X.shape)
         # Check is fit had been called
         check_is_fitted(self)
 

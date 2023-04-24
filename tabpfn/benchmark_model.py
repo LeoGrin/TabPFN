@@ -184,7 +184,7 @@ def get_benchmark_performance(model, metric="accuracy", suites=[337, 334, "cc18"
         else:
             results_baselines = {}
         accepted_tasks = []
-        #suite_id = str(suite_id) + "_large"
+        suite_id = str(suite_id)
         for task_id in tasks:
             for seed in range(n_iter):
                 print("Task id: {}".format(task_id))
@@ -256,12 +256,16 @@ def get_benchmark_performance(model, metric="accuracy", suites=[337, 334, "cc18"
 
 if __name__ == """__main__""":
     device = "cuda:3"
-    checkpoint = "trees24451_220"
-    model = TabPFNClassifier(device=device)#, no_preprocess_mode=True)
+    #checkpoint = "trees24451_220"
+    #checkpoint = "trees456_390"
+    checkpoint = "trees21463_400"
+    model = TabPFNClassifier(device=device, no_preprocess_mode=True)
+    #model = RandomForestClassifier(n_jobs=-1)
     #model = GradientBoostingClassifier()
     model_pytorch = load_model_no_train("model_checkpoints", f"model_{checkpoint}.pt", 0, model.c, 0)[0]
     model.model = model_pytorch
-    res = get_benchmark_performance(model, model_name="tabpfn", one_hot_encoding=False,)
+    res = get_benchmark_performance(model, model_name="tabpfn", one_hot_encoding=False,
+                                    suites=[337, 334], tasks_per_suite=[None, None])
     #model_name = f"tabpfn_{checkpoint}"
     #model_name = checkpoint
     model_name = checkpoint

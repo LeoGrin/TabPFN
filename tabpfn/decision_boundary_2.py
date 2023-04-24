@@ -250,14 +250,14 @@ names = [
 
 
 tabpfn_trees = TabPFNClassifier(no_preprocess_mode=True)
-checkpoint = "trees13368_60"
+checkpoint = "trees456_390"
 model_pytorch = load_model("tabpfn/model_checkpoints", f"model_{checkpoint}.pt", 2, config_sample, 0)[0]
 tabpfn_trees.model = model_pytorch
 
-tabpfn_trees_prepro = TabPFNClassifier(no_preprocess_mode=False)
-checkpoint = "trees13368_60"
-model_pytorch_propro = load_model("tabpfn/model_checkpoints", f"model_{checkpoint}.pt", 2, config_sample, 0)[0]
-tabpfn_trees_prepro.model = model_pytorch_propro
+# tabpfn_trees_prepro = TabPFNClassifier(no_preprocess_mode=False)
+# checkpoint = "trees_456_390"
+# model_pytorch_propro = load_model("tabpfn/model_checkpoints", f"model_{checkpoint}.pt", 2, config_sample, 0)[0]
+# tabpfn_trees_prepro.model = model_pytorch_propro
 
 classifiers = [
     KNeighborsClassifier(3),
@@ -272,7 +272,7 @@ classifiers = [
     QuadraticDiscriminantAnalysis(),
     TabPFNClassifier(),
     tabpfn_trees,
-    tabpfn_trees_prepro
+    #tabpfn_trees_prepro
 ]
 
 def make_square(inner_size=0.5, outer_size=1.0, n_samples=150, random_state=None):
@@ -302,6 +302,19 @@ def make_L_shape(n_samples=150, boundary_ratio=0.5, random_state=None):
     return X, y
 
 
+import numpy as np
+import matplotlib.pyplot as plt
+
+def generate_stripes(samples, stripe_width):
+    # generate X uniformly in 2D
+    X = np.random.uniform(0, 1, (samples, 2))
+    # generate y by checking if x is in the stripe
+    y = np.zeros(samples)
+    for i in range(samples):
+        if X[i, 0] // stripe_width % 2 == 0:
+            y[i] = 1
+    return X, y
+        
 
 
 
@@ -330,7 +343,8 @@ datasets = [
     linearly_separable,
     make_square(random_state=0),
     make_L_shape(random_state=0),
-    make_diagonal(random_state=0)
+    make_diagonal(random_state=0),
+    generate_stripes(250, 0.1)
 ]
 
 figure = plt.figure(figsize=(27, 9))
@@ -339,6 +353,7 @@ i = 1
 for ds_cnt, ds in enumerate(datasets):
     # preprocess dataset, split into training and test part
     X, y = ds
+    print("Shapes: ", X.shape, y.shape)
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.4, random_state=42
     )
@@ -366,9 +381,12 @@ for ds_cnt, ds in enumerate(datasets):
 
     # iterate over classifiers
     for name, clf in zip(names, classifiers):
+        print("Classifier: ", name)
         ax = plt.subplot(len(datasets), len(classifiers) + 1, i)
 
         clf = make_pipeline(StandardScaler(), clf)
+        print("X_train: ", X_train.shape)
+        print("X_test: ", X_test.shape)
         clf.fit(X_train, y_train)
         score = clf.score(X_test, y_test)
         DecisionBoundaryDisplay.from_estimator(

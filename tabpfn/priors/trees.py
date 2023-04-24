@@ -18,6 +18,8 @@ from joblib import Parallel, delayed
 from sklearn.ensemble import ExtraTreesClassifier
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.compose import ColumnTransformer
+from tabpfn.priors.flexible_categorical import remove_outliers, normalize_data, normalize_by_used_features_f
+from sklearn.preprocessing import LabelEncoder
 
 # class Tree:
 #     def __init__(self, depth, parent=None):
@@ -195,12 +197,14 @@ class GaussianNoise(nn.Module):
 
 
 def get_batch(batch_size, seq_len, num_features, hyperparameters, device=default_device, num_outputs=1, sampling='normal'
-              , epoch=None, **kwargs):
+              , epoch=None, verbose=0, **kwargs):
     if 'multiclass_type' in hyperparameters and hyperparameters['multiclass_type'] == 'multi_node':
         num_outputs = num_outputs * hyperparameters['num_classes']
 
     correlation_strength = np.random.uniform(hyperparameters['correlation_strength_min'], hyperparameters['correlation_strength_max'])
     correlation_proba = np.random.uniform(hyperparameters['correlation_proba_min'], hyperparameters['correlation_proba_max'])
+    num_classes = hyperparameters['num_classes']
+    num_features = hyperparameters['num_features_used']
 
     def get_seq():
         if sampling == 'normal':
@@ -274,6 +278,7 @@ def get_batch(batch_size, seq_len, num_features, hyperparameters, device=default
         
         if np.random.random() < 0.0001:
             print("------------------")
+            print("11111")
             print("X")
             print(X.shape)
             print(X)
@@ -286,12 +291,28 @@ def get_batch(batch_size, seq_len, num_features, hyperparameters, device=default
         max_depth = 2 + int(np.random.exponential( 1./ hyperparameters['max_depth_lambda']))
         # Sample number of trees from an exponential distribution with parameter lambda
         n_estimators = (1 + int(np.random.exponential(1. / hyperparameters['n_estimators_lambda']))) if (hyperparameters['n_estimators'] is None) else hyperparameters['n_estimators']
+        if verbose and np.random.random() < 0.0001:
+            print("n_estimators", n_estimators)
+            print("max_depth", max_depth)
+            print("num_features", num_features)
+            print(num_classes)
+            #print("num_classes",  hyperparameters['num_classes'])
         time_forest = time.time()
         forest = ExtraTreesClassifier(max_depth=max_depth, n_estimators=n_estimators, max_features=1, n_jobs=50) # max_features=1 means that the splits are totally random
-        num_classes = hyperparameters['num_classes']
-        forest.fit(X, np.random.randint(0, num_classes, data.shape[0])) #TODO unbalance
+        #num_classes = hyperparameters['num_classes']
+        fake_y = np.random.randint(0, num_classes, data.shape[0])
+        # label encoder to prevent holes in the class labels (e.g. 0, 1, 3)
+        le = LabelEncoder()
+        fake_y = le.fit_transform(fake_y)
+        forest.fit(X,fake_y) #TODO unbalance
+        if verbose and np.random.random() < 0.0001:
+            print("n_classes", forest.n_classes_)
+            print("classes", forest.classes_)
+            print(forest.predict_proba(X))
+            print(forest.predict_proba(X).shape)
             
-        y = forest.predict_proba(X)[:, 0]
+        #y = forest.predict_proba(X)[:, 0]
+        y = forest.predict(X)
         time_forest = time.time() - time_forest
         if np.random.random() < 0.001:
             print("Time to fit forest: ", time_forest)
@@ -300,11 +321,19 @@ def get_batch(batch_size, seq_len, num_features, hyperparameters, device=default
         # random feature rotation
         if hyperparameters.get("random_feature_rotation", False):
             data = data[..., (torch.arange(data.shape[-1], device="cpu")+random.randrange(data.shape[-1])) % data.shape[-1]]
+            
+        # data = data.reshape(-1, 1, num_features)
+            
+        # data = remove_outliers(data)
+        # data = normalize_data(data)
+        # data = normalize_by_used_features_f(data, num_features, hyperparameters['num_features'], normalize_with_sqrt=hyperparameters.get('normalize_with_sqrt',False))
         
-        # # Pad data with zeros to have 100 features
+        
+        # # # Pad data with zeros to have 100 features
         # if data.shape[-1] < 100:
-        #     padding = torch.zeros((data.shape[0], 100 - data.shape[-1]), device=device)
+        #     padding = torch.zeros((data.shape[0], 1, 100 - data.shape[-1]), device="cpu")
         #     data = torch.cat([data, padding], -1)
+            
 
         return data.to(device).reshape(-1, 1, num_features).float(), torch.from_numpy(y).to(device).reshape(-1, 1, num_outputs).float()
 

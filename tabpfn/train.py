@@ -98,7 +98,6 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
 
                 with autocast(enabled=scaler is not None):
                     # If style is set to None, it should not be transferred to device
-                    
                     output = model(tuple(e.to(device) if torch.is_tensor(e) else e for e in data) if isinstance(data, tuple) else data.to(device)
                                    , single_eval_pos=single_eval_pos)
 
