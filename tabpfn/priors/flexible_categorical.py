@@ -294,4 +294,23 @@ def get_batch(batch_size, seq_len, num_features, get_batch, device, hyperparamet
 # # Append empty features if enabled
 # x = torch.cat([x, torch.zeros((x.shape[0], x.shape[1], num_features - num_features_used), device=device)], -1)
 
+
+import torch
+from torch.utils.data import DataLoader
+from torch.utils.data import IterableDataset
+from torch.utils.data.distributed import DistributedSampler
+
+from torch.utils.data import IterableDataset
+
+class CustomDataset(IterableDataset):
+    def __init__(self):
+        super(CustomDataset, self).__init__()
+
+    def __iter__(self):
+        # Infinite loop to generate data points
+        while True:
+            yield get_batch()
+            
+dataset = CustomDataset()
+
 DataLoader = get_batch_to_dataloader(get_batch)
