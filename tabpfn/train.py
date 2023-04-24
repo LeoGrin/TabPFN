@@ -26,6 +26,7 @@ import openml
 from tabpfn.scripts.transformer_prediction_interface import TabPFNClassifier
 from evaluate_model import get_validation_performance
 from create_model import create_model, load_model_no_train_from_pytorch
+import git
 
 class Losses():
     gaussian = nn.GaussianNLLLoss(full=True, reduction='none')
@@ -59,6 +60,10 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
         model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[rank], output_device=rank, broadcast_buffers=False)
     dl.model = model
     
+    if use_wandb and rank == 0:
+        repo = git.Repo(search_parent_directories=True)
+        sha = repo.head.object.hexsha
+        wandb.log({"git_sha": sha})
 
 
     # learning rate
