@@ -89,6 +89,10 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
         assert len(dl) % aggregate_k_gradients == 0, 'Please set the number of steps per epoch s.t. `aggregate_k_gradients` divides it.'
         pbar = tqdm(enumerate(dl))
         for batch, (data, targets, single_eval_pos) in pbar:
+            data[0] = None
+            data[1] = torch.permute(data[1], (1, 0, 2))
+            data[2] = torch.permute(data[2], (1, 0))
+            targets = torch.permute(targets, (1, 0))
             if using_dist and not (batch % aggregate_k_gradients == aggregate_k_gradients - 1):
                 cm = model.no_sync()
             else:
@@ -103,7 +107,7 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
 
                 with autocast(enabled=scaler is not None):
                     # If style is set to None, it should not be transferred to device
-                    output = model(tuple(e.to(device) if torch.is_tensor(e) else e for e in data) if isinstance(data, tuple) else data.to(device)
+                    output = model(tuple(e.to(device) if torch.is_tensor(e) else e for e in data) if (isinstance(data, tuple) or isinstance(data, list)) else data.to(device)
                                    , single_eval_pos=single_eval_pos)
 
                     forward_time = time.time() - before_forward

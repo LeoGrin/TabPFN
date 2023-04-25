@@ -8,43 +8,70 @@ from torch import nn
 import numpy as np
 import scipy.stats as stats
 import math
+import torch
+from torch.utils.data import Dataset
+
+import torch
+import math
+from torch.utils.data import Dataset, DataLoader
+
+
 
 def get_batch_to_dataloader(get_batch_method_):
-    class DL(PriorDataLoader):
+    class CustomDataset(Dataset):
         get_batch_method = get_batch_method_
-
-        # Caution, you might need to set self.num_features manually if it is not part of the args.
         def __init__(self, num_steps, **get_batch_kwargs):
             set_locals_in_self(locals())
-
-            # The stuff outside the or is set as class attribute before instantiation.
-            self.num_features = get_batch_kwargs.get('num_features') or self.num_features
+            self.num_steps = num_steps
+            self.get_batch_kwargs = get_batch_kwargs
+            self.num_features = get_batch_kwargs.get('num_features')
             self.epoch_count = 0
-            #print('DataLoader.__dict__', self.__dict__)
 
         @staticmethod
         def gbm(*args, eval_pos_seq_len_sampler, **kwargs):
             kwargs['single_eval_pos'], kwargs['seq_len'] = eval_pos_seq_len_sampler()
-            # Scales the batch size dynamically with the power of 'dynamic_batch_size'.
-            # A transformer with quadratic memory usage in the seq len would need a power of 2 to keep memory constant.
-            if 'dynamic_batch_size' in kwargs and kwargs['dynamic_batch_size'] > 0 and kwargs['dynamic_batch_size']:
-                kwargs['batch_size'] = kwargs['batch_size'] * math.floor(math.pow(kwargs['seq_len_maximum'], kwargs['dynamic_batch_size']) / math.pow(kwargs['seq_len'], kwargs['dynamic_batch_size']))
+            # if 'dynamic_batch_size' in kwargs and kwargs['dynamic_batch_size'] > 0 and kwargs['dynamic_batch_size']:
+            #     kwargs['batch_size'] = kwargs['batch_size'] * math.floor(math.pow(kwargs['seq_len_maximum'], kwargs['dynamic_batch_size']) / math.pow(kwargs['seq_len'], kwargs['dynamic_batch_size']))
+            kwargs['batch_size'] = 1
             batch = get_batch_method_(*args, **kwargs)
             x, y, target_y, style = batch if len(batch) == 4 else (batch[0], batch[1], batch[2], None)
+            x = x.reshape(kwargs['seq_len'], kwargs['num_features'])
+            y = y.reshape(kwargs['seq_len'])
+            target_y = target_y.reshape(kwargs['seq_len'])
+            if style is None:
+                style = 0
+            #print((style, x, y), target_y, kwargs['single_eval_pos'])
             return (style, x, y), target_y, kwargs['single_eval_pos']
 
         def __len__(self):
             return self.num_steps
 
-        def get_test_batch(self): # does not increase epoch_count
+        def get_test_batch(self):
             return self.gbm(**self.get_batch_kwargs, epoch=self.epoch_count, model=self.model if hasattr(self, 'model') else None)
 
-        def __iter__(self):
-            assert hasattr(self, 'model'), "Please assign model with `dl.model = ...` before training."
+        def __getitem__(self, index):
+            #assert hasattr(self, 'model'), "Please assign model with `ds.model = ...` before training."
             self.epoch_count += 1
-            return iter(self.gbm(**self.get_batch_kwargs, epoch=self.epoch_count - 1, model=self.model) for _ in range(self.num_steps))
+            return self.gbm(**self.get_batch_kwargs, epoch=self.epoch_count - 1)#, model=self.model)
+    def generate_dataloader(num_steps, **get_batch_kwargs):
+        dataset = CustomDataset(num_steps, **get_batch_kwargs)
+        batch_size = get_batch_kwargs.get('batch_size', 32)
+        shuffle = get_batch_kwargs.get('shuffle', True)
+        num_workers = get_batch_kwargs.get('num_workers', 1)
+        drop_last = False                       # set to False if it represents important information loss
+        num_workers = 1                        # adjust number of CPU workers per process
+        persistent_workers = True              # set to False if CPU RAM must be released
+        pin_memory = True                      # optimize CPU to GPU transfers
+        non_blocking = True                    # activate asynchronism to speed up CPU/GPU transfers
+        prefetch_factor = 2                    # adjust number of batches to preload
+        dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle,
+                                drop_last=drop_last,
+                                pin_memory=pin_memory,
+                                prefetch_factor=prefetch_factor)
+        return dataloader
+    return generate_dataloader
 
-    return DL
+    
 
 def plot_features(data, targets, fig=None, categorical=True):
     import seaborn as sns
