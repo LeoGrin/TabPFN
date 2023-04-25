@@ -335,7 +335,7 @@ def get_batch(batch_size, seq_len, num_features, hyperparameters, device=default
         #     data = torch.cat([data, padding], -1)
             
 
-        return data.to(device).reshape(-1, 1, num_features).float(), torch.from_numpy(y).to(device).reshape(-1, 1, num_outputs).float()
+        return data.reshape(-1, 1, num_features).float(), torch.from_numpy(y).reshape(-1, 1, num_outputs).float()
 
     
 
