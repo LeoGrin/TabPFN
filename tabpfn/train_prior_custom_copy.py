@@ -27,6 +27,7 @@ from notebook_utils import *
 import argparse
 import wandb 
 from priors.utils import uniform_int_sampler_f
+import idr_torch
 
 
 
