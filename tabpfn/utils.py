@@ -281,7 +281,7 @@ def init_dist(device):
                                              world_size=idr_torch.size, rank=idr_torch.rank)
         torch.distributed.barrier()
         print_on_master_only(rank == 0)
-        print(f"Distributed training on {tidr_torch.size} GPUs, this is rank {idr_torch.rank}, "
+        print(f"Distributed training on {idr_torch.size} GPUs, this is rank {idr_torch.rank}, "
               "only I can print, but when using print(..., force=True) it will print on all ranks.")
 
         return True, rank, f'cuda:{rank}'
