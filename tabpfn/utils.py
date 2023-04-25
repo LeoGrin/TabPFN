@@ -8,6 +8,7 @@ import itertools
 import torch
 from torch import nn
 from torch.optim.lr_scheduler import LambdaLR
+import idr_torch
 
 # copied from huggingface
 def get_cosine_schedule_with_warmup(optimizer, num_warmup_steps, num_training_steps, num_cycles=0.5, last_epoch=-1):
