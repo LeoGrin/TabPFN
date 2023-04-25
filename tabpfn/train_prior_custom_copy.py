@@ -27,7 +27,6 @@ from notebook_utils import *
 import argparse
 import wandb 
 from priors.utils import uniform_int_sampler_f
-import idr_torch
 
 
 
@@ -67,8 +66,13 @@ parser.add_argument("--batch_size", type=int, default=None)
 parser.add_argument("--num_steps", type=int, default=None)
 # local rank
 parser.add_argument("--local_rank", type=int, default=None)
+# is on jean zay
+parser.add_argument("--jz", action='store_true')
 
 args = parser.parse_args()
+
+if args.jz:
+    import idr_torch
 
 if args.name == 'default':
     if args.prior is None:

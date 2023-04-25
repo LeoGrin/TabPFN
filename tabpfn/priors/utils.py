@@ -57,9 +57,10 @@ def get_batch_to_dataloader(get_batch_method_):
         dataset = CustomDataset(num_steps, **get_batch_kwargs)
         batch_size = get_batch_kwargs.get('batch_size', 32)
         shuffle = get_batch_kwargs.get('shuffle', True)
-        num_workers = get_batch_kwargs.get('num_workers', 1)
+        num_workers = get_batch_kwargs.get('num_workers', 0)
+        print("num_workers", num_workers)
         drop_last = False                       # set to False if it represents important information loss
-        num_workers = 1                        # adjust number of CPU workers per process
+        #num_workers = 1                        # adjust number of CPU workers per process
         persistent_workers = True              # set to False if CPU RAM must be released
         pin_memory = True                      # optimize CPU to GPU transfers
         non_blocking = True                    # activate asynchronism to speed up CPU/GPU transfers
@@ -67,6 +68,7 @@ def get_batch_to_dataloader(get_batch_method_):
         dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle,
                                 drop_last=drop_last,
                                 pin_memory=pin_memory,
+                                num_workers=num_workers,
                                 prefetch_factor=prefetch_factor)
         return dataloader
     return generate_dataloader

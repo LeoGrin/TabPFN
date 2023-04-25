@@ -95,7 +95,7 @@ def create_model(priordataloader_class, criterion, encoder_generator, emsize=200
     except Exception:
         pass
 
-    model.to(device)
+    #model.to(device)
     
     return model, dl, device, n_out
     

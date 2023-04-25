@@ -26,6 +26,7 @@ import openml
 from tabpfn.scripts.transformer_prediction_interface import TabPFNClassifier
 from evaluate_model import get_validation_performance
 from create_model import create_model, load_model_no_train_from_pytorch
+import idr_torch
 #import git
 
 class Losses():
@@ -54,10 +55,14 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
                                                        aggregate_k_gradients, verbose, style_encoder_generator, epoch_callback,
                                                        initializer, initialize_with_model, train_mixed_precision, efficient_eval_masking, use_wandb, name, save_every, **model_extra_args)
     using_dist, rank, device = init_dist(device)
+    torch.cuda.set_device(idr_torch.local_rank)
+    gpu = torch.device("cuda")
+    model = model.to(gpu)
     print("Using distributed training:", using_dist)
     if using_dist:
         print("Distributed training")
-        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[rank], output_device=rank, broadcast_buffers=False)
+        #model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[rank], output_device=rank, broadcast_buffers=False)
+        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[idr_torch.local_rank])
     dl.model = model
     
     # if use_wandb and rank == 0:
