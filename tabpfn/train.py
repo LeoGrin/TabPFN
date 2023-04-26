@@ -59,9 +59,9 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
     #     model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[rank], output_device=rank, broadcast_buffers=False)
     # dl.model = model
     using_dist, rank, device = init_dist(device)
-    torch.cuda.set_device(rank)
-    gpu = torch.device("cuda")
-    model = model.to(gpu)
+    #torch.cuda.set_device(rank)
+    #gpu = torch.device("cuda")
+    model = model.to(device)
     print("Using distributed training:", using_dist)
     if using_dist:
         print("Distributed training")
