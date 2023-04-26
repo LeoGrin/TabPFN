@@ -52,11 +52,21 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
                                                        load_weights_from_this_state_dict, validation_period, single_eval_pos_gen, bptt_extra_samples, gpu_device,
                                                        aggregate_k_gradients, verbose, style_encoder_generator, epoch_callback,
                                                        initializer, initialize_with_model, train_mixed_precision, efficient_eval_masking, use_wandb, name, save_every, **model_extra_args)
+    # using_dist, rank, device = init_dist(device)
+    # print("Using distributed training:", using_dist)
+    # if using_dist:
+    #     print("Distributed training")
+    #     model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[rank], output_device=rank, broadcast_buffers=False)
+    # dl.model = model
     using_dist, rank, device = init_dist(device)
+    torch.cuda.set_device(rank)
+    gpu = torch.device("cuda")
+    model = model.to(gpu)
     print("Using distributed training:", using_dist)
     if using_dist:
         print("Distributed training")
-        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[rank], output_device=rank, broadcast_buffers=False)
+        #model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[rank], output_device=rank, broadcast_buffers=False)
+        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[rank])
     dl.model = model
     
 
