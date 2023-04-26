@@ -374,15 +374,10 @@ for param in params:
 
 
 config["use_wandb"] = args.wandb
+config["wandb_offline"] = args.offline
 config["name"] = args.name
 config["save_every"] = args.save_every
 
-if args.wandb == True and args.local_rank == 0:
-    if args.offline:
-        os.environ['WANDB_MODE'] = 'offline'
-    print("initializing wandb")
-    wandb.init(project="tabpfn_training", entity="leogrin")
-    wandb.config.update(config)
 
 config_sample = evaluate_hypers(config)
 

@@ -309,6 +309,7 @@ def get_model(config, device, should_train=True, verbose=False, state_dict=None,
                 , encoder
                 , name = config['name']
                 , use_wandb=config["use_wandb"]
+                , wandb_offline=config["wandb_offline"]
                 , save_every=config['save_every']
                 , style_encoder_generator = encoders.StyleEncoder if use_style else None
                 , emsize=config['emsize']

@@ -43,7 +43,7 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
           y_encoder_generator=None, pos_encoder_generator=None, decoder=None, extra_prior_kwargs_dict={}, scheduler=get_cosine_schedule_with_warmup,
           load_weights_from_this_state_dict=None, validation_period=10, single_eval_pos_gen=None, bptt_extra_samples=None, gpu_device='cuda:0',
           aggregate_k_gradients=1, verbose=True, style_encoder_generator=None, epoch_callback=None,
-          initializer=None, initialize_with_model=None, train_mixed_precision=False, efficient_eval_masking=True, use_wandb=False, name="default", save_every=20, **model_extra_args
+          initializer=None, initialize_with_model=None, train_mixed_precision=False, efficient_eval_masking=True, use_wandb=False, wandb_offline=False,name="default", save_every=20, **model_extra_args
           ):
     
     model, dl, device, n_out = create_model(priordataloader_class, criterion, encoder_generator, emsize, nhid, nlayers, nhead, dropout,
@@ -82,6 +82,15 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
 
     # check that everything uses up-to-date APIs
     utils.check_compatibility(dl)
+    
+    if use_wandb and rank == 0:
+        if wandb_offline:
+            os.environ['WANDB_MODE'] = 'offline'
+        print("initializing wandb")
+        wandb.init(project="tabpfn_training", entity="leogrin")
+        wandb.config.update({"batch_size": batch_size,
+                             #TODO
+                             **model_extra_args})
     
     def train_epoch():
         model.train()  # Turn on the train mode
@@ -194,11 +203,11 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
                 model_sklearn = TabPFNClassifier(no_preprocess_mode=True, device=device)
                 model_pytorch = load_model_no_train_from_pytorch(model, config_sample=model_sklearn.c)[0]
                 model_sklearn.model = model_pytorch
-                try:
-                    measure_on_datasets = get_validation_performance(model_sklearn)
-                except:
-                    print("Failed to get validation performance")
-                    measure_on_datasets = {}
+                #try:
+                measure_on_datasets = get_validation_performance(model_sklearn)
+                #except:
+                print("Failed to get validation performance")
+                #measure_on_datasets = {}
                 wandb.log({
                     "epoch": epoch,
                     "train_loss": total_loss,
