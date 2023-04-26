@@ -56,6 +56,7 @@ parser.add_argument('--random_feature_removal', type=float, default=0.)
 
 parser.add_argument('--wandb', action='store_true')
 parser.add_argument('--offline', action='store_true')
+parser.add_argument('--validate_on_datasets', action='store_true')
 parser.add_argument('--device', type=int, default=0)
 parser.add_argument('--name', type=str, default='default')
 parser.add_argument('--save_every', type=int, default=30)
