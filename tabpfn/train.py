@@ -99,7 +99,7 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
                 with autocast(enabled=scaler is not None):
                     # If style is set to None, it should not be transferred to device
                     
-                    output = model(tuple(e.to(device) if torch.is_tensor(e) else e for e in data) if isinstance(data, tuple) else data.to(device)
+                    output = model(tuple(e.to(device, non_blocking=True) if torch.is_tensor(e) else e for e in data) if (isinstance(data, tuple) or isinstance(data, list)) else data.to(device, non_blocking=True)
                                    , single_eval_pos=single_eval_pos)
 
                     forward_time = time.time() - before_forward
@@ -112,11 +112,11 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
 
                         mean_pred = output[..., 0]
                         var_pred = output[..., 1].abs()
-                        losses = criterion(mean_pred.flatten(), targets.to(device).flatten(), var=var_pred.flatten())
+                        losses = criterion(mean_pred.flatten(), targets.to(device, non_blocking=True).flatten(), var=var_pred.flatten())
                     elif isinstance(criterion, (nn.MSELoss, nn.BCEWithLogitsLoss)):
-                        losses = criterion(output.flatten(), targets.to(device).flatten())
+                        losses = criterion(output.flatten(), targets.to(device, non_blocking=True).flatten())
                     elif isinstance(criterion, nn.CrossEntropyLoss):
-                        losses = criterion(output.reshape(-1, n_out), targets.to(device).long().flatten())
+                        losses = criterion(output.reshape(-1, n_out), targets.to(device, non_blocking=True).long().flatten())
                     else:
                         losses = criterion(output, targets)
                     losses = losses.view(*output.shape[0:2])

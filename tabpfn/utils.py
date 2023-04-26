@@ -298,7 +298,7 @@ class NOP():
 def check_compatibility(dl):
     if hasattr(dl, 'num_outputs'):
         print('`num_outputs` for the DataLoader is deprecated. It is assumed to be 1 from now on.')
-        assert dl.num_outputs != 1, "We assume num_outputs to be 1. Instead of the num_ouputs change your loss." \
+        assert dl.dataset.num_outputs != 1, "We assume num_outputs to be 1. Instead of the num_ouputs change your loss." \
                                     "We specify the number of classes in the CE loss."
 
 def product_dict(dic):

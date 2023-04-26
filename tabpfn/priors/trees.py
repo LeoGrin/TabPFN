@@ -287,7 +287,7 @@ def get_batch(batch_size, seq_len, num_features, hyperparameters, device=default
         # Sample number of trees from an exponential distribution with parameter lambda
         n_estimators = (1 + int(np.random.exponential(1. / hyperparameters['n_estimators_lambda']))) if (hyperparameters['n_estimators'] is None) else hyperparameters['n_estimators']
         time_forest = time.time()
-        forest = ExtraTreesClassifier(max_depth=max_depth, n_estimators=n_estimators, max_features=1, n_jobs=50) # max_features=1 means that the splits are totally random
+        forest = ExtraTreesClassifier(max_depth=max_depth, n_estimators=n_estimators, max_features=1, n_jobs=1) # max_features=1 means that the splits are totally random
         num_classes = hyperparameters['num_classes']
         forest.fit(X, np.random.randint(0, num_classes, data.shape[0])) #TODO unbalance
             
@@ -306,7 +306,7 @@ def get_batch(batch_size, seq_len, num_features, hyperparameters, device=default
         #     padding = torch.zeros((data.shape[0], 100 - data.shape[-1]), device=device)
         #     data = torch.cat([data, padding], -1)
 
-        return data.to(device).reshape(-1, 1, num_features).float(), torch.from_numpy(y).to(device).reshape(-1, 1, num_outputs).float()
+        return data.reshape(-1, 1, num_features).float(), torch.from_numpy(y).reshape(-1, 1, num_outputs).float()
 
     
 

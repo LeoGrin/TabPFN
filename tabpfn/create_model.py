@@ -62,9 +62,11 @@ def create_model(priordataloader_class, criterion, encoder_generator, emsize=200
             return single_eval_pos, single_eval_pos + bptt_extra_samples
         else:
             return single_eval_pos, bptt
-    dl = priordataloader_class(num_steps=steps_per_epoch, batch_size=batch_size, eval_pos_seq_len_sampler=eval_pos_seq_len_sampler, seq_len_maximum=bptt+(bptt_extra_samples if bptt_extra_samples else 0), device=device, **extra_prior_kwargs_dict)
+    get_batch_args = {"num_steps":steps_per_epoch, "batch_size":batch_size, "eval_pos_seq_len_sampler":eval_pos_seq_len_sampler, "seq_len_maximum":bptt+(bptt_extra_samples if bptt_extra_samples else 0), "device":device, **extra_prior_kwargs_dict}
+    dataloader_args = {"num_workers":10, "pin_memory":True, "persistent_workers":True, "prefetch_factor":3}
+    dl = priordataloader_class(dataloader_args, get_batch_args)
 
-    encoder = encoder_generator(dl.num_features, emsize)
+    encoder = encoder_generator(dl.dataset.num_features, emsize)
     #style_def = dl.get_test_batch()[0][0] # the style in batch of the form ((style, x, y), target, single_eval_pos)
     style_def = None
     #print(f'Style definition of first 3 examples: {style_def[:3] if style_def is not None else None}')

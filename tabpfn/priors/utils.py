@@ -9,43 +9,116 @@ import numpy as np
 import scipy.stats as stats
 import math
 
-def get_batch_to_dataloader(get_batch_method_):
-    class DL(PriorDataLoader):
-        get_batch_method = get_batch_method_
+from torch.utils.data import IterableDataset, DataLoader
+from typing import Callable, Optional
+import math
+import torch
+import numpy as np
+import random
 
-        # Caution, you might need to set self.num_features manually if it is not part of the args.
-        def __init__(self, num_steps, **get_batch_kwargs):
-            set_locals_in_self(locals())
 
-            # The stuff outside the or is set as class attribute before instantiation.
-            self.num_features = get_batch_kwargs.get('num_features') or self.num_features
-            self.epoch_count = 0
-            #print('DataLoader.__dict__', self.__dict__)
+def make_dataloader(dataloader_kwargs, get_batch_kwargs, test_loader=False):
+    if test_loader:
+        get_batch_kwargs["batch_size"] = 1
+        dataloader_kwargs["num_workers"] = 0
+        dataloader_kwargs["pin_memory"] = False
+        dataloader_kwargs.pop("prefetch_factor", None)  # Remove key if it exists
+        dataloader_kwargs.pop("persistent_workers", None)  # Remove key if it exists
 
-        @staticmethod
-        def gbm(*args, eval_pos_seq_len_sampler, **kwargs):
-            kwargs['single_eval_pos'], kwargs['seq_len'] = eval_pos_seq_len_sampler()
-            # Scales the batch size dynamically with the power of 'dynamic_batch_size'.
-            # A transformer with quadratic memory usage in the seq len would need a power of 2 to keep memory constant.
-            if 'dynamic_batch_size' in kwargs and kwargs['dynamic_batch_size'] > 0 and kwargs['dynamic_batch_size']:
-                kwargs['batch_size'] = kwargs['batch_size'] * math.floor(math.pow(kwargs['seq_len_maximum'], kwargs['dynamic_batch_size']) / math.pow(kwargs['seq_len'], kwargs['dynamic_batch_size']))
-            batch = get_batch_method_(*args, **kwargs)
-            x, y, target_y, style = batch if len(batch) == 4 else (batch[0], batch[1], batch[2], None)
-            return (style, x, y), target_y, kwargs['single_eval_pos']
+    ds = PriorDataset(**get_batch_kwargs)
+    dl = DataLoader(
+        ds,
+        batch_size=None,
+        batch_sampler=None,  # This disables automatic batching
+        #test_loader=test_loader,
+        **dataloader_kwargs,
+    )
+    return dl
 
-        def __len__(self):
-            return self.num_steps
+def get_batch_to_dataloader(get_batch_method):
+    def return_dl(dataload_kwargs, get_batch_kwargs, test_loader=False):
+        get_batch_kwargs["get_batch_method"] = get_batch_method
+        return make_dataloader(dataload_kwargs, get_batch_kwargs, test_loader=test_loader)
+    return return_dl
 
-        def get_test_batch(self): # does not increase epoch_count
-            return self.gbm(**self.get_batch_kwargs, epoch=self.epoch_count, model=self.model if hasattr(self, 'model') else None)
 
-        def __iter__(self):
-            assert hasattr(self, 'model'), "Please assign model with `dl.model = ...` before training."
-            self.epoch_count += 1
-            return iter(self.gbm(**self.get_batch_kwargs, epoch=self.epoch_count - 1, model=self.model) for _ in range(self.num_steps))
+class PriorDataset(IterableDataset):
+    def __init__(
+        self,
+        num_steps: int,
+        batch_size: int,
+        eval_pos_seq_len_sampler: Callable,
+        get_batch_method: Callable,
+        num_features,
+        seq_len_maximum: Optional[int] = None,
+        device: Optional[str] = "cpu",
+        test_loader: Optional[bool] = False,
+        **get_batch_kwargs,
+    ):
+        # The stuff outside the or is set as class attribute before instantiation.
+        self.num_features = num_features
+        self.num_steps = num_steps
+        self.batch_size = batch_size
+        self.eval_pos_seq_len_sampler = eval_pos_seq_len_sampler
+        self.seq_len_maximum = seq_len_maximum
+        self.device = device
+        self.get_batch_kwargs = get_batch_kwargs
+        self.get_batch_method = get_batch_method
+        self.model = None
+        self.epoch = 0
+        self.test_loader = test_loader
+        print("DataLoader.__dict__", self.__dict__)
 
-    return DL
+    def gbm(self):
+        single_eval_pos, seq_len = self.eval_pos_seq_len_sampler()
+        # Scales the batch size dynamically with the power of 'dynamic_batch_size'.
+        # A transformer with quadratic memory usage in the seq len would need a power of 2 to keep memory constant.
+        # if 'dynamic_batch_size' in kwargs and kwargs['dynamic_batch_size'] > 0 and kwargs[
+        #    'dynamic_batch_size'] is not None:
+        #    kwargs['batch_size'] = kwargs['batch_size'] * math.floor(
+        #        math.pow(kwargs['seq_len_maximum'], kwargs['dynamic_batch_size'])
+        #        / math.pow(kwargs['seq_len'], kwargs['dynamic_batch_size'])
+        #    )
+        batch = self.get_batch_method(
+            single_eval_pos=single_eval_pos,
+            seq_len=seq_len,
+            batch_size=self.batch_size,
+            num_features=self.num_features,
+            device=self.device,
+            model=self.model,
+            epoch=self.epoch,
+            test_batch=self.test_loader,
+            **self.get_batch_kwargs,
+        )
+        #TODO
+        #if batch.single_eval_pos is None:
+        #    batch.single_eval_pos = single_eval_pos
+        
 
+        return (0, batch[0], batch[1]), batch[2], single_eval_pos # data (style, x, y), target, single_eval_pos
+
+    def __len__(self):
+        return self.num_steps
+
+    def __iter__(self):
+        worker_info = torch.utils.data.get_worker_info()
+        # Different workers should have different seeds for numpy, python (pytorch automatic)
+        num_steps = self.num_steps
+        if worker_info is not None:
+            np.random.seed(worker_info.seed % (2**32))
+            random.seed(worker_info.seed % (2**32))
+            num_steps = math.ceil(
+                self.num_steps / worker_info.num_workers
+            )  # Rounding up means some workers will do unnecessary work, but that's fine.
+
+        # TODO: Why do we assign model, do we want to keep that behavior?
+        # assert hasattr(self, 'model'), "Please assign model with `dl.model = ...` before training."
+        if num_steps > 0:
+            it = iter(self.gbm() for _ in range(num_steps))
+        else:
+            it = iter(self.gbm, 1)
+        return it
+    
 def plot_features(data, targets, fig=None, categorical=True):
     import seaborn as sns
     import matplotlib.pyplot as plt
