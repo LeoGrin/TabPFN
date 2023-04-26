@@ -55,6 +55,7 @@ parser.add_argument('--correlation_strength_max', type=float, default=0.)
 parser.add_argument('--random_feature_removal', type=float, default=0.)
 
 parser.add_argument('--wandb', action='store_true')
+parser.add_argument('--offline', action='store_true')
 parser.add_argument('--device', type=int, default=0)
 parser.add_argument('--name', type=str, default='default')
 parser.add_argument('--save_every', type=int, default=30)
@@ -377,6 +378,8 @@ config["name"] = args.name
 config["save_every"] = args.save_every
 
 if args.wandb == True and args.local_rank == 0:
+    if args.offline:
+        os.environ['WANDB_MODE'] = 'offline'
     print("initializing wandb")
     wandb.init(project="tabpfn_training", entity="leogrin")
     wandb.config.update(config)

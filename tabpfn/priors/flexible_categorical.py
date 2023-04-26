@@ -255,10 +255,10 @@ def get_batch(batch_size, seq_len, num_features, get_batch, device, hyperparamet
     # Sample one seq_len for entire batch
     seq_len = hyperparameters['seq_len_used']() if callable(hyperparameters['seq_len_used']) else seq_len
 
-    args = {'device': device, 'seq_len': seq_len, 'num_features': num_features, 'batch_size': batch_size_per_gp_sample, **kwargs}
+    args = {'device': "cpu", 'seq_len': seq_len, 'num_features': num_features, 'batch_size': batch_size_per_gp_sample, **kwargs}
 
-    models = [FlexibleCategorical(get_batch, hyperparameters, args).to(device) for _ in range(num_models)]
-    #models = [FlexibleCategorical(get_batch, hyperparameters, args) for _ in range(num_models)]
+    #models = [FlexibleCategorical(get_batch, hyperparameters, args).to(device) for _ in range(num_models)]
+    models = [FlexibleCategorical(get_batch, hyperparameters, args) for _ in range(num_models)]
 
     sample = [model(batch_size=batch_size_per_gp_sample) for model in models]
 

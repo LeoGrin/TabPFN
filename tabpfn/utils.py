@@ -268,17 +268,25 @@ def init_dist(device):
     elif 'SLURM_PROCID' in os.environ and torch.cuda.device_count() > 1:
         # this is for multi gpu when starting with submitit
         assert device != 'cpu:0'
-        rank = int(os.environ['SLURM_PROCID'])
-        os.environ['MASTER_ADDR'] = 'localhost'
-        os.environ['MASTER_PORT'] = '12355'
+        try:
+            import idr_torch # this sets up the environment variables on Jean Zay
+            print("We're on Jean Zay, using idr_torch")
+            rank = idr_torch.rank
+            world_size = idr_torch.size
+        except:
+            # we're not on Jean Zay
+            rank = int(os.environ['SLURM_PROCID'])
+            os.environ['MASTER_ADDR'] = 'localhost'
+            os.environ['MASTER_PORT'] = '12355'
+            world_size = torch.cuda.device_count()
         torch.cuda.set_device(rank)
         os.environ['CUDA_VISIBLE_DEVICES'] = str(rank)
         print('distributed submitit launch and my rank is', rank)
         torch.distributed.init_process_group(backend="nccl", init_method="env://", timeout=datetime.timedelta(seconds=20),
-                                             world_size=torch.cuda.device_count(), rank=rank)
+                                             world_size=world_size, rank=rank)
         torch.distributed.barrier()
         print_on_master_only(rank == 0)
-        print(f"Distributed training on {torch.cuda.device_count()} GPUs, this is rank {rank}, "
+        print(f"Distributed training on {world_size} GPUs, this is rank {rank}, "
               "only I can print, but when using print(..., force=True) it will print on all ranks.")
 
         return True, rank, f'cuda:{rank}'
