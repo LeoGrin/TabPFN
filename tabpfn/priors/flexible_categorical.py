@@ -198,9 +198,9 @@ class FlexibleCategorical(torch.nn.Module):
         start = time.time()
         # Append empty features if enabled
         x = torch.cat(
-            [x, torch.zeros((x.shape[0], x.shape[1], self.args['num_features'] - self.h['num_features_used']))], -1
-            )
-                            #device=self.args['device'])], -1)
+            [x, torch.zeros((x.shape[0], x.shape[1], self.args['num_features'] - self.h['num_features_used'])
+                            ,device=self.args['device'])
+             ], -1)
         if time_it:
             print('Flex Forward Block 6', round(time.time() - start, 3))
 
@@ -238,7 +238,7 @@ class FlexibleCategorical(torch.nn.Module):
                     num_classes_float = (y[valid_labels, b].max() + 1).cpu()
                     num_classes = num_classes_float.int().item()
                     assert num_classes == num_classes_float.item()
-                    random_shift = torch.randint(0, num_classes, (1,))#, device=self.args['device'])
+                    random_shift = torch.randint(0, num_classes, (1,), device=self.args['device'])
                     y[valid_labels, b] = (y[valid_labels, b] + random_shift) % num_classes
 
         return x, y, y  # x.shape = (T,B,H)
@@ -257,8 +257,8 @@ def get_batch(batch_size, seq_len, num_features, get_batch, device, hyperparamet
 
     args = {'device': device, 'seq_len': seq_len, 'num_features': num_features, 'batch_size': batch_size_per_gp_sample, **kwargs}
 
-    #models = [FlexibleCategorical(get_batch, hyperparameters, args).to(device) for _ in range(num_models)]
-    models = [FlexibleCategorical(get_batch, hyperparameters, args) for _ in range(num_models)]
+    models = [FlexibleCategorical(get_batch, hyperparameters, args).to(device) for _ in range(num_models)]
+    #models = [FlexibleCategorical(get_batch, hyperparameters, args) for _ in range(num_models)]
 
     sample = [model(batch_size=batch_size_per_gp_sample) for model in models]
 

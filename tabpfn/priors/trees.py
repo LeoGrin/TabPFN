@@ -198,6 +198,7 @@ def get_batch(batch_size, seq_len, num_features, hyperparameters, device=default
               , epoch=None, **kwargs):
     if 'multiclass_type' in hyperparameters and hyperparameters['multiclass_type'] == 'multi_node':
         num_outputs = num_outputs * hyperparameters['num_classes']
+        
 
     correlation_strength = np.random.uniform(hyperparameters['correlation_strength_min'], hyperparameters['correlation_strength_max'])
     correlation_proba = np.random.uniform(hyperparameters['correlation_proba_min'], hyperparameters['correlation_proba_max'])

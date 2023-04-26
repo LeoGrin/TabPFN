@@ -93,6 +93,7 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
         before_get_batch = time.time()
         assert len(dl) % aggregate_k_gradients == 0, 'Please set the number of steps per epoch s.t. `aggregate_k_gradients` divides it.'
         pbar = tqdm(enumerate(dl))
+        print("len(dl)", len(dl))
         for batch, (data, targets, single_eval_pos) in pbar:
             if using_dist and not (batch % aggregate_k_gradients == aggregate_k_gradients - 1):
                 cm = model.no_sync()
