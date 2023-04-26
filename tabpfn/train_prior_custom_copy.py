@@ -378,6 +378,7 @@ config["use_wandb"] = args.wandb
 config["wandb_offline"] = args.offline
 config["name"] = args.name
 config["save_every"] = args.save_every
+config["validate_on_datasets"] =  args.validate_on_datasets
 
 
 config_sample = evaluate_hypers(config)
