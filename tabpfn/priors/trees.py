@@ -16,7 +16,7 @@ import torch.nn.functional as F
 import time
 from joblib import Parallel, delayed
 from sklearn.ensemble import ExtraTreesClassifier
-from sklearn.preprocessing import OneHotEncoder
+from sklearn.preprocessing import OneHotEncoder, LabelEncoder
 from sklearn.compose import ColumnTransformer
 
 # class Tree:
@@ -191,6 +191,38 @@ class GaussianNoise(nn.Module):
 
     def forward(self, x):
         return x + torch.normal(torch.zeros_like(x), self.std)
+    
+    
+def randomize_leaves_func(forest, n_classes):
+    class_labels_used = np.zeros(n_classes, dtype=bool)
+    for tree in forest.estimators_:
+        n_nodes = tree.tree_.node_count
+        is_leaf = np.zeros(shape=n_nodes, dtype=bool)
+    
+        for i in range(n_nodes):
+            if tree.tree_.children_left[i] == -1:
+                is_leaf[i] = True
+
+        leaf_indices = np.where(is_leaf)[0]
+
+        # Generate random class labels for each leaf node
+        random_class_labels = np.random.randint(0, n_classes, len(leaf_indices))
+        for label in random_class_labels:
+            if not class_labels_used[label]:
+                class_labels_used[label] = True
+
+        # Replace leaf node values with random class labels
+        for i, leaf_idx in enumerate(leaf_indices):
+            tree.tree_.value[leaf_idx] = np.zeros((1, n_classes))
+            tree.tree_.value[leaf_idx, 0, random_class_labels[i]] = 1
+    
+    # check that all classes have been used
+    #TODO
+    # if not np.all(class_labels_used):
+    #     print("Warning: not all classes have been used")
+    #     print("Trying again...")
+    #     return randomize_leaves_func(forest, n_classes)
+    return forest
 
 
 
@@ -289,10 +321,22 @@ def get_batch(batch_size, seq_len, num_features, hyperparameters, device=default
         n_estimators = (1 + int(np.random.exponential(1. / hyperparameters['n_estimators_lambda']))) if (hyperparameters['n_estimators'] is None) else hyperparameters['n_estimators']
         time_forest = time.time()
         forest = ExtraTreesClassifier(max_depth=max_depth, n_estimators=n_estimators, max_features=1, n_jobs=1) # max_features=1 means that the splits are totally random
-        num_classes = hyperparameters['num_classes']
-        forest.fit(X, np.random.randint(0, num_classes, data.shape[0])) #TODO unbalance
-            
-        y = forest.predict_proba(X)[:, 0]
+        num_classes = hyperparameters['num_classes']        
+
+        fake_y = np.random.randint(0, num_classes, data.shape[0])
+        # label encoder to prevent holes in the class labels (e.g. 0, 1, 3)
+        le = LabelEncoder()
+        fake_y = le.fit_transform(fake_y)
+        forest.fit(X,fake_y) #TODO unbalance
+        
+        if hyperparameters["randomize_leaves"]:
+            forest = randomize_leaves_func(forest, num_classes)
+
+        if hyperparameters["return_classes"]:
+            y = forest.predict(X)
+        else:
+            # uses flexible_categorical class_assigner
+            y = forest.predict_proba(X)[:, 0]
         time_forest = time.time() - time_forest
         if np.random.random() < 0.001:
             print("Time to fit forest: ", time_forest)

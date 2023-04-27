@@ -53,6 +53,10 @@ parser.add_argument('--correlation_proba_max', type=float, default=0.)
 parser.add_argument('--correlation_strength_min', type=float, default=0.)
 parser.add_argument('--correlation_strength_max', type=float, default=0.)
 parser.add_argument('--random_feature_removal', type=float, default=0.)
+# whether to return directly the classes instead of the probabilities
+parser.add_argument('--return_classes', action='store_true')
+#whether to randomize the leaves of the fitted tree before predicting
+parser.add_argument('--randomize_leaves', action='store_true')
 
 parser.add_argument('--wandb', action='store_true')
 parser.add_argument('--offline', action='store_true')
@@ -239,7 +243,7 @@ config = {'lr': 0.0001,
   'max_num_classes': 10,
   'num_classes': None,
   'noise_type': 'Gaussian',
-  'balanced': True,
+  'balanced': False,
   'normalize_to_ranking': False,
   'set_value_to_nan': 0.1,
   'normalize_by_used_features': True,
@@ -342,7 +346,7 @@ config = {'lr': 0.0001,
   "max_eval_pos": 1000}
 
 config["seq_len_used"] = 50
-config["num_classes"] = 2#uniform_int_sampler_f(2, config['max_num_classes'])
+config["num_classes"] = uniform_int_sampler_f(2, config['max_num_classes'])
 config["num_features_used"] = {'num_features_func': uniform_int_sampler_f(3, config['num_features'])}
 
 
@@ -356,6 +360,9 @@ if args.prior is not None:
     config["max_depth_lambda"] = args.max_depth_lambda
     config["min_categories"] = args.min_categories
     config["max_categories"] = args.max_categories
+    config["assign_class_in_flexible_categorical"] = not args.return_classes
+    config["return_classes"] = args.return_classes
+    config["randomize_leaves"] = args.randomize_leaves
     print(f"Using {args.prior} prior with n_estimators_lambda={args.n_estimators_lambda}, n_estimators={args.n_estimators}, max_depth_lambda={args.max_depth_lambda}")
 
 params = ["lr", "p_categorical", "batch_size", "num_steps", "correlation_proba_min",

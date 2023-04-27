@@ -206,14 +206,18 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
                 if validate_on_datasets:
                     try:
                         import idr_torch
+                        on_jean_zay = True
                         print("We're on Jean Zay, loading the datasets from pickle")
+                    except:
+                        on_jean_zay = False
+                        print("We're not on Jean Zay, loading the datasets from openml")
+                    if on_jean_zay:
                         measure_on_datasets = get_validation_performance(model_sklearn, datasets = [
                                 [44089, 44120, 44121, 44122, 44123, 44125, 44126, 44128, 44129, 44130, 45022,
         45021, 45020, 45019, 45028, 45026],
                                 [44156, 44157, 44159, 45035, 45036, 45038, 45039]
                         ])
-                    except:
-                        print("We're not on Jean Zay, loading the datasets from openml")
+                    else:
                         measure_on_datasets = get_validation_performance(model_sklearn)
                     #except:
                     #    print("Failed to get validation performance")

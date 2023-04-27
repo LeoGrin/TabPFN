@@ -256,6 +256,7 @@ def get_model(config, device, should_train=True, verbose=False, state_dict=None,
         if 'flexible' in config and config['flexible']:
             get_batch_base = make_get_batch(model_proto)
             extra_kwargs['get_batch'] = get_batch_base
+            extra_kwargs["assign_class_in_flexible_categorical"] = config["assign_class_in_flexible_categorical"] if "assign_class_in_flexible_categorical" in config else True
             model_proto = priors.flexible_categorical
 
     if config.get('flexible'):

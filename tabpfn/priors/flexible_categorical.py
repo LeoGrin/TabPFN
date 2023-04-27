@@ -178,14 +178,18 @@ class FlexibleCategorical(torch.nn.Module):
             x = to_ranking_low_mem(x)
         else:
             x = remove_outliers(x)
-        x, y = normalize_data(x), normalize_data(y)
+        if self.args["assign_class_in_flexible_categorical"]:
+            x, y = normalize_data(x), normalize_data(y)
+        else:
+            x = normalize_data(x)
 
         if time_it:
             print('Flex Forward Block 3', round(time.time() - start, 3))
             start = time.time()
 
         # Cast to classification if enabled
-        y = self.class_assigner(y).float()
+        if self.args["assign_class_in_flexible_categorical"]:
+            y = self.class_assigner(y).float()
 
         if time_it:
             print('Flex Forward Block 4', round(time.time() - start, 3))
