@@ -120,14 +120,18 @@ def import_open_ml_data(dataset_id=None, task_id=None, remove_nans=None, impute_
 
 
 def get_validation_performance(model, metric="accuracy", suites=[337, 334],
+                               datasets=[None, None],
                                baselines=[("gbt", GradientBoostingClassifier), 
                                           ("tabpfn", TabPFNClassifier),
                                           ("logreg", LogisticRegression)],
                                recompute=False):
     res = {}
-    for suite_id in suites:
-        suite = openml.study.get_suite(suite_id)
-        tasks = suite.tasks
+    for k, suite_id in enumerate(suites):
+        if datasets[k] is None:
+            suite = openml.study.get_suite(suite_id)
+            tasks = suite.tasks
+        else:
+            tasks = datasets[k]
         # check if saved results exist
         if os.path.exists("results_{}.pkl".format(suite_id)) and not recompute:
             with open("results_{}.pkl".format(suite_id), "rb") as f:
@@ -138,7 +142,12 @@ def get_validation_performance(model, metric="accuracy", suites=[337, 334],
         accepted_tasks = []
         for task_id in tasks:
             print("Task id: {}".format(task_id))
-            X, y, _ = import_open_ml_data(task_id=task_id, remove_nans=True, impute_nans=False, categorical=False, regression=False, balance=False, rng=None)
+            if datasets[k] is None:
+                X, y, _ = import_open_ml_data(task_id=task_id, remove_nans=True, impute_nans=False, categorical=False, regression=False, balance=False, rng=None)
+            else:
+                bunch = pickle.load(open("openml_datasets/openml_{}.pkl".format(task_id), "rb"))
+                X = bunch.data
+                y = bunch.target
             if X.shape[1] > 100:
                 print("skipping task {} because it has too many features".format(task_id))
                 continue
