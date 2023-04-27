@@ -349,6 +349,7 @@ def get_model(config, device, should_train=True, verbose=False, state_dict=None,
         }
                 , lr=config['lr']
                 , verbose=verbose_train,
-                weight_decay=config.get('weight_decay', 0.0))
+                weight_decay=config.get('weight_decay', 0.0),
+                config=config)
 
     return model
