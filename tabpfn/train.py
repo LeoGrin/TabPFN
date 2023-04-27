@@ -235,7 +235,7 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
                     **measure_on_datasets
                 })
             
-            if epoch % save_every == 0 and epoch > 0:
+            if epoch % save_every == 0 and epoch > 0 and rank == 0:
                 # Save model
                 torch.save(model.state_dict(), f"./model_checkpoints/model_{name}_{epoch}.pt")
                 print(f"Saved model_{epoch}.pt")
