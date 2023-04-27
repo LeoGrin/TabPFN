@@ -54,7 +54,8 @@ def import_open_ml_data(dataset_id=None, task_id=None, remove_nans=None, impute_
         )
     else:
         #used for jean zay where we don't have network access
-        bunch = pickle.load(open("openml_datasets/openml_{}.pkl".format(task_id), "rb"))
+        with open("openml_datasets/openml_{}.pkl".format(task_id), "rb") as f:
+            bunch = pickle.load(f)
         X = bunch.data
         y = bunch.target
         categorical_indicator = bunch.data.dtypes == "category"
