@@ -189,8 +189,9 @@ def get_validation_performance(model, metric="accuracy", suites=[337, 334],
                         baseline.fit(X_train, y_train)
                         results_baselines[task_id][name] = baseline.score(X_test, y_test)
         # save results
-        with open("results_{}.pkl".format(suite_id), "wb") as f:
-            pickle.dump(results_baselines, f)
+        if not os.path.exists("results_{}.pkl".format(suite_id)):
+            with open("results_{}.pkl".format(suite_id), "wb") as f:
+                pickle.dump(results_baselines, f)
         
         # aggregate results
         # Make a dataframe with the results
