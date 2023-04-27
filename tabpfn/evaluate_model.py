@@ -35,22 +35,30 @@ def balance_data(x, y):
 
     return x.iloc[total_indices], y
 
-def import_open_ml_data(dataset_id=None, task_id=None, remove_nans=None, impute_nans=None, categorical=False, regression=False, balance=False, rng=None) -> pd.DataFrame:
+def import_open_ml_data(dataset_id=None, task_id=None, remove_nans=None, impute_nans=None, categorical=False, regression=False, balance=False, rng=None, from_pickle=False) -> pd.DataFrame:
     """
     Import data from openML
     :param int openml_task_id:
     :param path_to_file:
     :return:
     """
-    if task_id is not None:
-        task = openml.tasks.get_task(task_id)  # download the OpenML task
-        dataset = task.get_dataset()
-    elif dataset_id is not None:
-        dataset = openml.datasets.get_dataset(dataset_id)
-    # retrieve categorical data for encoding
-    X, y, categorical_indicator, attribute_names = dataset.get_data(
-        dataset_format="dataframe", target=dataset.default_target_attribute
-    )
+    if not from_pickle:
+        if task_id is not None:
+            task = openml.tasks.get_task(task_id)  # download the OpenML task
+            dataset = task.get_dataset()
+        elif dataset_id is not None:
+            dataset = openml.datasets.get_dataset(dataset_id)
+        # retrieve categorical data for encoding
+        X, y, categorical_indicator, attribute_names = dataset.get_data(
+            dataset_format="dataframe", target=dataset.default_target_attribute
+        )
+    else:
+        #used for jean zay where we don't have network access
+        bunch = pickle.load(open("openml_datasets/openml_{}.pkl".format(task_id), "rb"))
+        X = bunch.data
+        y = bunch.target
+        categorical_indicator = bunch.data.dtypes == "category"
+        X, y = X.to_numpy(), y.to_numpy()
     categorical_indicator = np.array(categorical_indicator)
     print("{} categorical columns".format(sum(categorical_indicator)))
     print("{} columns".format(X.shape[1]))
@@ -143,7 +151,8 @@ def get_validation_performance(model, metric="accuracy", suites=[337, 334],
         for task_id in tasks:
             print("Task id: {}".format(task_id))
             if datasets[k] is None:
-                X, y, _ = import_open_ml_data(task_id=task_id, remove_nans=True, impute_nans=False, categorical=False, regression=False, balance=False, rng=None)
+                X, y, _ = import_open_ml_data(task_id=task_id, remove_nans=True, impute_nans=False, categorical=False, regression=False, balance=False, rng=None,
+                                              from_pickle=datasets[k] is not None)
             else:
                 bunch = pickle.load(open("openml_datasets/openml_{}.pkl".format(task_id), "rb"))
                 X = bunch.data
