@@ -150,13 +150,8 @@ def get_validation_performance(model, metric="accuracy", suites=[337, 334],
         accepted_tasks = []
         for task_id in tasks:
             print("Task id: {}".format(task_id))
-            if datasets[k] is None:
-                X, y, _ = import_open_ml_data(task_id=task_id, remove_nans=True, impute_nans=False, categorical=False, regression=False, balance=False, rng=None,
+            X, y, _ = import_open_ml_data(task_id=task_id, remove_nans=True, impute_nans=False, categorical=False, regression=False, balance=False, rng=None,
                                               from_pickle=datasets[k] is not None)
-            else:
-                bunch = pickle.load(open("openml_datasets/openml_{}.pkl".format(task_id), "rb"))
-                X = bunch.data
-                y = bunch.target
             if X.shape[1] > 100:
                 print("skipping task {} because it has too many features".format(task_id))
                 continue
