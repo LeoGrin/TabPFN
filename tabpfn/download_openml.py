@@ -1,4 +1,5 @@
 from sklearn.datasets import fetch_openml
+import pickle
 
 # suites = [337, 334]
 
@@ -17,3 +18,5 @@ dataset_ids = [44089, 44120, 44121, 44122, 44123, 44125, 44126, 44128, 44129, 44
 for dataset_id in dataset_ids:
     # download the dataset
     data = fetch_openml(data_id=dataset_id, as_frame=True)
+    # save to file
+    pickle.dump(data, open(f"openml_{dataset_id}.pkl", "wb"))
