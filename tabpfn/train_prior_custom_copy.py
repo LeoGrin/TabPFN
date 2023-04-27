@@ -41,6 +41,8 @@ parser.add_argument('--max_depth_lambda', type=float, default=None)
 # checkpoint_file
 parser.add_argument('--checkpoint_file', type=str, default=None)
 
+parser.add_argument('--num_features', type=int, default=100)
+
 # p_categorical
 parser.add_argument('--p_categorical', type=float, default=0.)
 # min and max categories
@@ -53,6 +55,9 @@ parser.add_argument('--correlation_proba_max', type=float, default=0.)
 parser.add_argument('--correlation_strength_min', type=float, default=0.)
 parser.add_argument('--correlation_strength_max', type=float, default=0.)
 parser.add_argument('--random_feature_removal', type=float, default=0.)
+parser.add_argument('--random_feature_removal_min', type=float, default=0.)
+
+
 # whether to return directly the classes instead of the probabilities
 parser.add_argument('--return_classes', action='store_true')
 #whether to randomize the leaves of the fitted tree before predicting
@@ -229,7 +234,7 @@ config = {'lr': 0.0001,
   'nhead': 4,
   'nhid_factor': 2,
   'eval_positions': None,
-  'sampling': 'mixed',
+  'sampling': 'normal',
   'epochs': 400,
   'num_steps': 128,
   'verbose': False,
@@ -345,6 +350,16 @@ config = {'lr': 0.0001,
   'attend_to_global_tokens_only_at_test': False,
   "max_eval_pos": 1000}
 
+
+
+params = ["lr", "p_categorical", "batch_size", "num_steps", "correlation_proba_min",
+          "correlation_proba_max", "correlation_strength_min", "correlation_strength_max",
+          "random_feature_removal", "random_feature_removal_min", "num_features"]
+for param in params:
+    if getattr(args, param) is not None:
+        config[param] = getattr(args, param)
+        print(f"Using {param}={getattr(args, param)}")
+
 config["seq_len_used"] = 50
 config["num_classes"] = uniform_int_sampler_f(2, config['max_num_classes'])
 config["num_features_used"] = {'num_features_func': uniform_int_sampler_f(3, config['num_features'])}
@@ -353,7 +368,7 @@ config["num_features_used"] = {'num_features_func': uniform_int_sampler_f(3, con
 
 
 if args.prior is not None:
-    assert args.prior in ['trees', 'mlp_trees']
+    assert args.prior in ['trees', 'mlp_trees', "linear"]
     config["prior_type"] = args.prior
     config["n_estimators_lambda"] = args.n_estimators_lambda
     config["n_estimators"] = args.n_estimators
@@ -365,13 +380,6 @@ if args.prior is not None:
     config["randomize_leaves"] = args.randomize_leaves
     print(f"Using {args.prior} prior with n_estimators_lambda={args.n_estimators_lambda}, n_estimators={args.n_estimators}, max_depth_lambda={args.max_depth_lambda}")
 
-params = ["lr", "p_categorical", "batch_size", "num_steps", "correlation_proba_min",
-          "correlation_proba_max", "correlation_strength_min", "correlation_strength_max",
-          "random_feature_removal"]
-for param in params:
-    if getattr(args, param) is not None:
-        config[param] = getattr(args, param)
-        print(f"Using {param}={getattr(args, param)}")
 
     
 #config['aggregate_k_gradients'] = 8

@@ -231,6 +231,7 @@ def get_batch(batch_size, seq_len, num_features, hyperparameters, device=default
     if 'multiclass_type' in hyperparameters and hyperparameters['multiclass_type'] == 'multi_node':
         num_outputs = num_outputs * hyperparameters['num_classes']
         
+        
 
     correlation_strength = np.random.uniform(hyperparameters['correlation_strength_min'], hyperparameters['correlation_strength_max'])
     correlation_proba = np.random.uniform(hyperparameters['correlation_proba_min'], hyperparameters['correlation_proba_max'])
@@ -290,7 +291,7 @@ def get_batch(batch_size, seq_len, num_features, hyperparameters, device=default
         X = data.reshape(-1, num_features)
         if hyperparameters.get("random_feature_removal", 0) > 0:
             # sample the number of features to remove
-            number_of_features_to_remove = int(np.random.uniform(0, hyperparameters["random_feature_removal"] * X.shape[1]))
+            number_of_features_to_remove = int(np.random.uniform(hyperparameters["random_feature_removal_min"], hyperparameters["random_feature_removal"] * X.shape[1]))
             number_of_features_to_remove = min(number_of_features_to_remove, X.shape[1] -3) # make sure we have at least 3 features
             features_to_remove = np.random.choice(X.shape[1], number_of_features_to_remove, replace=False)
             X = np.delete(X, features_to_remove, axis=1)

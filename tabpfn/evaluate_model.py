@@ -58,7 +58,7 @@ def import_open_ml_data(dataset_id=None, task_id=None, remove_nans=None, impute_
         X = bunch.data
         y = bunch.target
         categorical_indicator = bunch.data.dtypes == "category"
-        X, y = X.to_numpy(), y.to_numpy()
+        #X, y = X.to_numpy(), y.to_numpy()
     categorical_indicator = np.array(categorical_indicator)
     print("{} categorical columns".format(sum(categorical_indicator)))
     print("{} columns".format(X.shape[1]))

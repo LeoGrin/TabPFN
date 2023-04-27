@@ -174,6 +174,9 @@ def get_gp_prior_hyperparameters(config):
 def get_trees_prior_hyperparameters(config):
     return {hp: (list(config[hp].values())[0]) if type(config[hp]) is dict else config[hp] for hp in config}
 
+def get_linear_prior_hyperparameters(config):
+    return {hp: (list(config[hp].values())[0]) if type(config[hp]) is dict else config[hp] for hp in config}
+
 def get_mlp_trees_prior_hyperparameters(config):
     return {hp: (list(config[hp].values())[0]) if type(config[hp]) is dict else config[hp] for hp in config}
 
@@ -250,6 +253,9 @@ def get_model(config, device, should_train=True, verbose=False, state_dict=None,
         elif config['prior_type'] == 'mlp_trees':
             prior_hyperparameters = get_mlp_trees_prior_hyperparameters(config)
             model_proto = priors.mlp_trees
+        elif config['prior_type'] == 'linear':
+            prior_hyperparameters = get_linear_prior_hyperparameters(config)
+            model_proto = priors.linear
         else:
             raise Exception()
 
