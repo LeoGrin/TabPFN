@@ -204,15 +204,15 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
                 model_pytorch = load_model_no_train_from_pytorch(model, config_sample=model_sklearn.c)[0]
                 model_sklearn.model = model_pytorch
                 if validate_on_datasets:
-                    try:
-                        measure_on_datasets = get_validation_performance(model_sklearn, datasets = [
+                    #try:
+                    measure_on_datasets = get_validation_performance(model_sklearn, datasets = [
                             [44089, 44120, 44121, 44122, 44123, 44125, 44126, 44128, 44129, 44130, 45022,
        45021, 45020, 45019, 45028, 45026],
                             [44156, 44157, 44159, 45035, 45036, 45038, 45039]
-                        ])
-                    except:
-                        print("Failed to get validation performance")
-                        measure_on_datasets = {}
+                    ])
+                    #except:
+                    #    print("Failed to get validation performance")
+                    #    measure_on_datasets = {}
                 else:
                     measure_on_datasets = {}
                 wandb.log({
