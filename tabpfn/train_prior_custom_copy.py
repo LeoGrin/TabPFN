@@ -56,6 +56,7 @@ parser.add_argument('--correlation_strength_min', type=float, default=0.)
 parser.add_argument('--correlation_strength_max', type=float, default=0.)
 parser.add_argument('--random_feature_removal', type=float, default=0.)
 parser.add_argument('--random_feature_removal_min', type=float, default=0.)
+parser.add_argument('--sampling', type=str, default="mixed")
 
 
 # whether to return directly the classes instead of the probabilities
@@ -234,7 +235,7 @@ config = {'lr': 0.0001,
   'nhead': 4,
   'nhid_factor': 2,
   'eval_positions': None,
-  'sampling': 'normal',
+  'sampling': 'mixed',
   'epochs': 400,
   'num_steps': 128,
   'verbose': False,
@@ -354,7 +355,7 @@ config = {'lr': 0.0001,
 
 params = ["lr", "p_categorical", "batch_size", "num_steps", "correlation_proba_min",
           "correlation_proba_max", "correlation_strength_min", "correlation_strength_max",
-          "random_feature_removal", "random_feature_removal_min", "num_features"]
+          "random_feature_removal", "random_feature_removal_min", "num_features", "sampling"]
 for param in params:
     if getattr(args, param) is not None:
         config[param] = getattr(args, param)
