@@ -101,7 +101,7 @@ def get_batch(batch_size, seq_len, num_features, hyperparameters, device=default
             full_encoder = ColumnTransformer([('cat', cat_encoder, categorical_features)], remainder='passthrough')
             X = full_encoder.fit_transform(X)
         
-        if np.random.random() < 1:
+        if np.random.random() < 0.001:
             print("------------------")
             print("X")
             print(X.shape)
