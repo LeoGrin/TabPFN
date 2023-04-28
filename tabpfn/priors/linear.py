@@ -79,8 +79,6 @@ def get_batch(batch_size, seq_len, num_features, hyperparameters, device=default
             probas = np.random.dirichlet(np.ones(n_categories))
             # Convert to categorical
             data[:, i] = np.random.choice(n_categories, data.shape[0], p=probas)
-            
-        print("time X", time.time() - start)
 
 
         # Remove random features
@@ -120,9 +118,6 @@ def get_batch(batch_size, seq_len, num_features, hyperparameters, device=default
         # Generate the target
         y = np.dot(X, W) + b
         
-        print("y computed")
-        print("time", time.time() - start)
-
         
 
         data = torch.from_numpy(data)#.to(device)
@@ -134,7 +129,6 @@ def get_batch(batch_size, seq_len, num_features, hyperparameters, device=default
         # if data.shape[-1] < 100:
         #     padding = torch.zeros((data.shape[0], 100 - data.shape[-1]), device=device)
         #     data = torch.cat([data, padding], -1)
-        print("time total", time.time() - start)
 
         return data.reshape(-1, 1, num_features).float(), torch.from_numpy(y).reshape(-1, 1, num_outputs).float()
 
@@ -147,8 +141,6 @@ def get_batch(batch_size, seq_len, num_features, hyperparameters, device=default
     #     get_model = lambda: model
 
     sample = [get_seq() for _ in range(0, batch_size)]
-    print("sample")
-    print([e[0].shape for e in sample])
 
     x, y = zip(*sample)
     y = torch.cat(y, 1).detach().squeeze(2)
