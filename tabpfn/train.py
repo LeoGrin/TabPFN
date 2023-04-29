@@ -87,9 +87,12 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
         if wandb_offline:
             os.environ['WANDB_MODE'] = 'offline'
         print("initializing wandb")
-        run = wandb.init(project="tabpfn_training", entity="leogrin")
+        wandb.init(project="tabpfn_training", entity="leogrin")
         wandb.config.update(config)
-        name += "_" + run.id
+        print("wandb initialized")
+        print("name", name)
+        print("wandb id", wandb.run.id)
+        name += "_" + wandb.run.id
 
     
     def train_epoch():
