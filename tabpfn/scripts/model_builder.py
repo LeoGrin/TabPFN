@@ -312,50 +312,46 @@ def get_model(config, device, should_train=True, verbose=False, state_dict=None,
 
     epochs = 0 if not should_train else config['epochs']
     #print('MODEL BUILDER', model_proto, extra_kwargs['get_batch'])
-    try:
-        model = train(model_proto.DataLoader
-                    , loss
-                    , encoder
-                    , name = config['name']
-                    , use_wandb=config["use_wandb"]
-                    , wandb_offline=config["wandb_offline"]
-                    , validate_on_datasets=config["validate_on_datasets"]
-                    , save_every=config['save_every']
-                    , style_encoder_generator = encoders.StyleEncoder if use_style else None
-                    , emsize=config['emsize']
-                    , nhead=config['nhead']
-                    # For unsupervised learning change to NanHandlingEncoder
-                    , y_encoder_generator= encoders.get_Canonical(config['max_num_classes']) if config.get('canonical_y_encoder', False) else encoders.Linear
-                    , pos_encoder_generator=None
-                    , batch_size=config['batch_size']
-                    , nlayers=config['nlayers']
-                    , nhid=config['emsize'] * config['nhid_factor']
-                    , epochs=epochs
-                    , warmup_epochs=20
-                    , bptt=config['bptt']
-                    , gpu_device=device
-                    , dropout=config['dropout']
-                    , steps_per_epoch=config['num_steps']
-                    , single_eval_pos_gen=get_uniform_single_eval_pos_sampler(config.get('max_eval_pos', config['bptt']), min_len=config.get('min_eval_pos', 0))
-                    , load_weights_from_this_state_dict=state_dict
-                    , aggregate_k_gradients=aggregate_k_gradients
-                    , recompute_attn=config['recompute_attn']
-                    , epoch_callback=epoch_callback
-                    , bptt_extra_samples = config['bptt_extra_samples']
-                    , extra_prior_kwargs_dict={
-                'num_features': config['num_features']
-                , 'hyperparameters': prior_hyperparameters
-                #, 'dynamic_batch_size': 1 if ('num_global_att_tokens' in config and config['num_global_att_tokens']) else 2
-                , 'batch_size_per_gp_sample': config.get('batch_size_per_gp_sample', None)
-                , **extra_kwargs
-            }
-                    , lr=config['lr']
-                    , verbose=verbose_train,
-                    weight_decay=config.get('weight_decay', 0.0),
-                    config=config)
-    except:
-        if config["use_wandb"]:
-            wandb.finish()
-            # should upload the config file
+    model = train(model_proto.DataLoader
+                , loss
+                , encoder
+                , name = config['name']
+                , use_wandb=config["use_wandb"]
+                , wandb_offline=config["wandb_offline"]
+                , validate_on_datasets=config["validate_on_datasets"]
+                , save_every=config['save_every']
+                , style_encoder_generator = encoders.StyleEncoder if use_style else None
+                , emsize=config['emsize']
+                , nhead=config['nhead']
+                # For unsupervised learning change to NanHandlingEncoder
+                , y_encoder_generator= encoders.get_Canonical(config['max_num_classes']) if config.get('canonical_y_encoder', False) else encoders.Linear
+                , pos_encoder_generator=None
+                , batch_size=config['batch_size']
+                , nlayers=config['nlayers']
+                , nhid=config['emsize'] * config['nhid_factor']
+                , epochs=epochs
+                , warmup_epochs=20
+                , bptt=config['bptt']
+                , gpu_device=device
+                , dropout=config['dropout']
+                , steps_per_epoch=config['num_steps']
+                , single_eval_pos_gen=get_uniform_single_eval_pos_sampler(config.get('max_eval_pos', config['bptt']), min_len=config.get('min_eval_pos', 0))
+                , load_weights_from_this_state_dict=state_dict
+                , aggregate_k_gradients=aggregate_k_gradients
+                , recompute_attn=config['recompute_attn']
+                , epoch_callback=epoch_callback
+                , bptt_extra_samples = config['bptt_extra_samples']
+                , extra_prior_kwargs_dict={
+            'num_features': config['num_features']
+            , 'hyperparameters': prior_hyperparameters
+            #, 'dynamic_batch_size': 1 if ('num_global_att_tokens' in config and config['num_global_att_tokens']) else 2
+            , 'batch_size_per_gp_sample': config.get('batch_size_per_gp_sample', None)
+            , **extra_kwargs
+        }
+                , lr=config['lr']
+                , verbose=verbose_train,
+                weight_decay=config.get('weight_decay', 0.0),
+                config=config)
+
 
     return model
