@@ -89,7 +89,7 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
         print("initializing wandb")
         run = wandb.init(project="tabpfn_training", entity="leogrin")
         wandb.config.update(config)
-        name += "_" + run.name
+        name += "_" + run.id
 
     
     def train_epoch():
