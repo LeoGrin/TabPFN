@@ -87,10 +87,13 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
         if wandb_offline:
             os.environ['WANDB_MODE'] = 'offline'
         print("initializing wandb")
-        wandb.init(project="tabpfn_training", entity="leogrin")
+        run = wandb.init(project="tabpfn_training", entity="leogrin")
         wandb.config.update(config)
+        name += "_" + run.name
+
     
     def train_epoch():
+        
         model.train()  # Turn on the train mode
         total_loss = 0.
         total_positional_losses = 0.
