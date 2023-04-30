@@ -16,6 +16,8 @@ from create_model import load_model_no_train
 from sklearn.metrics import roc_auc_score, accuracy_score, f1_score, precision_score, recall_score
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
+from scipy.stats import special_ortho_group
+
 
 def balance_data(x, y):
     rng = np.random.RandomState(0)
@@ -169,7 +171,8 @@ def get_benchmark_performance(model, metric="accuracy", suites=[337, 334, "cc18"
                                                                 40975]],
                                recompute=False, n_iter=3,
                                model_name = "None",
-                               one_hot_encoding=False,):
+                               one_hot_encoding=False,
+                               random_rotation=False,):
     res = pd.DataFrame(columns=["suite_id", "task_id", "seed", "metric", "value"])
     for i, suite_id in enumerate(suites):
         if tasks_per_suite[i] is None:
@@ -217,6 +220,11 @@ def get_benchmark_performance(model, metric="accuracy", suites=[337, 334, "cc18"
                 y = y[indices]
                 print(X[0])
                 print(y[0])
+                
+                if random_rotation:
+                    rotation_matrix = special_ortho_group.rvs(X.shape[1], random_state=rng)
+                    X = X @ rotation_matrix
+                
                 # evaluate model
                 # with cross validation
                 # Create a cross-validation object
@@ -255,16 +263,17 @@ def get_benchmark_performance(model, metric="accuracy", suites=[337, 334, "cc18"
     return res
 
 if __name__ == """__main__""":
-    device = "cuda:3"
-    checkpoint = "trees24451_220"
-    model = TabPFNClassifier(device=device)#, no_preprocess_mode=True)
+    device = "cuda:1"
+    #checkpoint = "trees55166_49voozm8_220"
+    checkpoint = "trees69859_eouc70o7_390"
+    model = TabPFNClassifier(device=device, no_preprocess_mode=False)
     #model = GradientBoostingClassifier()
     model_pytorch = load_model_no_train("model_checkpoints", f"model_{checkpoint}.pt", 0, model.c, 0)[0]
     model.model = model_pytorch
     res = get_benchmark_performance(model, model_name="tabpfn", one_hot_encoding=False,)
     #model_name = f"tabpfn_{checkpoint}"
     #model_name = checkpoint
-    model_name = checkpoint
+    model_name = checkpoint + "prepro"
     print(res)
     res["model"] = model_name
     results = pd.read_csv("results_benchmark.csv")
