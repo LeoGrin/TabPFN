@@ -369,6 +369,17 @@ config["num_classes"] = uniform_int_sampler_f(2, config['max_num_classes'])
 config["num_features_used"] = {'num_features_func': uniform_int_sampler_f(3, config['num_features'])}
 
 
+config["remove_outliers_in_flexible_categorical"] = True
+config["normalize_x_in_flexible_categorical"] = True
+
+if args.prior == "linear":
+  #already normal
+  #TODO: change this when the linear prior becomes more flexible
+  config["sampling"] = "normal"
+  config["remove_outliers_in_flexible_categorical"] = False
+  config["normalize_x_in_flexible_categorical"] = False
+  config["random_feature_rotation"] = False
+
 
 
 if args.prior is not None:

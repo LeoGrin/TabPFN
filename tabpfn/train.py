@@ -148,6 +148,7 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
                     loss = loss / aggregate_k_gradients
 
                 if scaler: loss = scaler.scale(loss)
+                before_backward = time.time()
                 loss.backward()
 
                 if batch % aggregate_k_gradients == aggregate_k_gradients - 1:
@@ -162,6 +163,7 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
                     except:
                         print("Invalid optimization step encountered")
                     optimizer.zero_grad()
+                backward_time = time.time() - before_backward
 
                 step_time = time.time() - before_forward
 

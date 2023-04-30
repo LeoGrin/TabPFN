@@ -6,6 +6,7 @@ from tabpfn.utils import get_uniform_single_eval_pos_sampler
 import torch
 import math
 import wandb
+import traceback
 
 def save_model(model, path, filename, config_sample):
     config_sample = {**config_sample}
@@ -264,6 +265,8 @@ def get_model(config, device, should_train=True, verbose=False, state_dict=None,
             get_batch_base = make_get_batch(model_proto)
             extra_kwargs['get_batch'] = get_batch_base
             extra_kwargs["assign_class_in_flexible_categorical"] = config["assign_class_in_flexible_categorical"] if "assign_class_in_flexible_categorical" in config else True
+            extra_kwargs["remove_outliers_in_flexible_categorical"] = config["remove_outliers_in_flexible_categorical"] if "remove_outliers_in_flexible_categorical" in config else True
+            extra_kwargs["normalize_x_in_flexible_categorical"] = config["normalize_x_in_flexible_categorical"] if "normalize_x_in_flexible_categorical" in config else True
             model_proto = priors.flexible_categorical
 
     if config.get('flexible'):
@@ -353,9 +356,11 @@ def get_model(config, device, should_train=True, verbose=False, state_dict=None,
                     , verbose=verbose_train,
                     weight_decay=config.get('weight_decay', 0.0),
                     config=config)
-    except:
-        print("Exception in training")
+    except Exception as e:
         wandb.finish()
+        print("Exception in training")
+        print(e)
+        print(traceback.format_exc())
         #wandb.run.finish()
 
 
