@@ -322,7 +322,7 @@ config = {'lr': 0.0001,
    'multiclass_type': {'distribution': 'meta_choice',
     'choice_values': ['value', 'rank']}},
   #'prior_type': 'prior_bag',
-  'prior_type': 'gp',
+  'prior_type': 'mlp',
   'differentiable': True,
   'flexible': True,
   'aggregate_k_gradients': 8,
@@ -366,7 +366,7 @@ for param in params:
         print(f"Using {param}={getattr(args, param)}")
 
 config["seq_len_used"] = 50
-config["num_classes"] = uniform_int_sampler_f(2, config['max_num_classes'])
+config["num_classes"] = 11#uniform_int_sampler_f(2, config['max_num_classes']) #TODO: make it work with return_classes
 config["num_features_used"] = {'num_features_func': uniform_int_sampler_f(3, config['num_features'])}
 
 
