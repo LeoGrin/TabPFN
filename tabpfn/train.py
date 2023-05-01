@@ -86,6 +86,7 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
     
     if use_wandb and rank == 0:
         if wandb_offline:
+            print("setting wandb offline")
             os.environ['WANDB_MODE'] = 'offline'
         print("initializing wandb")
         wandb.init(project="tabpfn_training", entity="leogrin")
@@ -97,12 +98,14 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
     if use_neptune and rank == 0:
         print("initializing neptune")
         if wandb_offline:
+            print("setting neptune offline")
             run = neptune.init_run(
                 project="leogrin/tabpfn-training",
                 api_token="eyJhcGlfYWRkcmVzcyI6Imh0dHBzOi8vYXBwLm5lcHR1bmUuYWkiLCJhcGlfdXJsIjoiaHR0cHM6Ly9hcHAubmVwdHVuZS5haSIsImFwaV9rZXkiOiJkNGY1NTJlYS0wNzgzLTQxM2EtOWFlZi02NmVmNmQ2MTRlNWIifQ==",
                 mode="offline"
             )
         else:
+            print("setting neptune online")
             run = neptune.init(
                 project="leogrin/tabpfn-training",
                 api_token="eyJhcGlfYWRkcmVzcyI6Imh0dHBzOi8vYXBwLm5lcHR1bmUuYWkiLCJhcGlfdXJsIjoiaHR0cHM6Ly9hcHAubmVwdHVuZS5haSIsImFwaV9rZXkiOiJkNGY1NTJlYS0wNzgzLTQxM2EtOWFlZi02NmVmNmQ2MTRlNWIifQ=="
