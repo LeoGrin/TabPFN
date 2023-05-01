@@ -171,3 +171,6 @@ tabpfn/wandb/
 #
 *.cpkt
 *.pt
+*csv
+tabpfn/.neptune/
+.neptune/
