@@ -67,6 +67,7 @@ parser.add_argument('--return_classes', action='store_true')
 parser.add_argument('--randomize_leaves', action='store_true')
 
 parser.add_argument('--wandb', action='store_true')
+parser.add_argument('--neptune', action='store_true')
 parser.add_argument('--offline', action='store_true')
 parser.add_argument('--validate_on_datasets', action='store_true')
 parser.add_argument('--device', type=int, default=0)
@@ -405,6 +406,7 @@ if args.prior is not None:
 
 
 config["use_wandb"] = args.wandb
+config["use_neptune"] = args.neptune
 config["wandb_offline"] = args.offline
 config["name"] = args.name
 config["save_every"] = args.save_every

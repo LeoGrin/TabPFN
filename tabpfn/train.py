@@ -26,6 +26,7 @@ import openml
 from tabpfn.scripts.transformer_prediction_interface import TabPFNClassifier
 from evaluate_model import get_validation_performance
 from create_model import create_model, load_model_no_train_from_pytorch
+import neptune
 
 class Losses():
     gaussian = nn.GaussianNLLLoss(full=True, reduction='none')
@@ -43,7 +44,7 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
           y_encoder_generator=None, pos_encoder_generator=None, decoder=None, extra_prior_kwargs_dict={}, scheduler=get_cosine_schedule_with_warmup,
           load_weights_from_this_state_dict=None, validation_period=10, single_eval_pos_gen=None, bptt_extra_samples=None, gpu_device='cuda:0',
           aggregate_k_gradients=1, verbose=True, style_encoder_generator=None, epoch_callback=None,
-          initializer=None, initialize_with_model=None, train_mixed_precision=False, efficient_eval_masking=True, use_wandb=False, wandb_offline=False, validate_on_datasets=False, name="default", save_every=20, config={}, **model_extra_args
+          initializer=None, initialize_with_model=None, train_mixed_precision=False, efficient_eval_masking=True, use_wandb=False, wandb_offline=False, use_neptune=False, validate_on_datasets=False, name="default", save_every=20, config={}, **model_extra_args
           ):
     
     model, dl, device, n_out = create_model(priordataloader_class, criterion, encoder_generator, emsize, nhid, nlayers, nhead, dropout,
@@ -93,6 +94,20 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
         print("name", name)
         print("wandb id", wandb.run.id)
         name += "_" + wandb.run.id
+    if use_neptune and rank == 0:
+        print("initializing neptune")
+        if wandb_offline:
+            run = neptune.init_run(
+                project="leogrin/tabpfn-training",
+                api_token="eyJhcGlfYWRkcmVzcyI6Imh0dHBzOi8vYXBwLm5lcHR1bmUuYWkiLCJhcGlfdXJsIjoiaHR0cHM6Ly9hcHAubmVwdHVuZS5haSIsImFwaV9rZXkiOiJkNGY1NTJlYS0wNzgzLTQxM2EtOWFlZi02NmVmNmQ2MTRlNWIifQ==",
+                mode="offline"
+            )
+        else:
+            run = neptune.init(
+                project="leogrin/tabpfn-training",
+                api_token="eyJhcGlfYWRkcmVzcyI6Imh0dHBzOi8vYXBwLm5lcHR1bmUuYWkiLCJhcGlfdXJsIjoiaHR0cHM6Ly9hcHAubmVwdHVuZS5haSIsImFwaV9rZXkiOiJkNGY1NTJlYS0wNzgzLTQxM2EtOWFlZi02NmVmNmQ2MTRlNWIifQ=="
+            )
+        run["config"] = config
 
     
     def train_epoch():
@@ -205,7 +220,7 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
             else:
                 val_score = None
 
-            if use_wandb and rank == 0:
+            if (use_wandb or use_neptune) and rank == 0:
                 model_sklearn = TabPFNClassifier(no_preprocess_mode=True, device=device)
                 model_pytorch = load_model_no_train_from_pytorch(model, config_sample=model_sklearn.c)[0]
                 model_sklearn.model = model_pytorch
@@ -220,7 +235,7 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
                     if on_jean_zay:
                         measure_on_datasets = get_validation_performance(model_sklearn, datasets = [
                                 [44089, 44120, 44121, 44122, 44123, 44125, 44126, 44128, 44129, 44130, 45022,
-        45021, 45020, 45019, 45028, 45026],
+                                    45021, 45020, 45019, 45028, 45026],
                                 [44156, 44157, 44159, 45035, 45036, 45038, 45039]
                         ])
                     else:
@@ -230,18 +245,24 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
                     #    measure_on_datasets = {}
                 else:
                     measure_on_datasets = {}
-                wandb.log({
-                    "epoch": epoch,
-                    "train_loss": total_loss,
-                    "val_loss": val_score,
-                    "lr": optimizer.param_groups[0]['lr'],
-                    "time_to_get_batch": time_to_get_batch,
-                    "forward_time": forward_time,
-                    "step_time": step_time,
-                    "nan_share": nan_share,
-                    "ignore_share": ignore_share,
-                    **measure_on_datasets
-                })
+                metric_dic = {
+                        "epoch": epoch,
+                        "train_loss": total_loss,
+                        "val_loss": val_score,
+                        "lr": optimizer.param_groups[0]['lr'],
+                        "time_to_get_batch": time_to_get_batch,
+                        "forward_time": forward_time,
+                        "step_time": step_time,
+                        "nan_share": nan_share,
+                        "ignore_share": ignore_share,
+                        **measure_on_datasets
+                    }
+                if use_wandb:
+                    wandb.log(metric_dic)
+                if use_neptune:
+                    for key, value in metric_dic.items():
+                        run["metrics/" + key].append(value)
+                    
             
             if epoch % save_every == 0 and epoch > 0 and rank == 0:
                 # Save model
@@ -269,6 +290,12 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
         pass
 
     if rank == 0: # trivially true for non-parallel training
+        # finish neptune run
+        if use_neptune:
+            run.stop()
+        # finish wandb run
+        if use_wandb:
+            wandb.finish()
         if isinstance(model, torch.nn.parallel.DistributedDataParallel):
             model = model.module
             dl = None

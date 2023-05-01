@@ -322,6 +322,7 @@ def get_model(config, device, should_train=True, verbose=False, state_dict=None,
                     , name = config['name']
                     , use_wandb=config["use_wandb"]
                     , wandb_offline=config["wandb_offline"]
+                    , use_neptune=config["use_neptune"]
                     , validate_on_datasets=config["validate_on_datasets"]
                     , save_every=config['save_every']
                     , style_encoder_generator = encoders.StyleEncoder if use_style else None
@@ -357,11 +358,10 @@ def get_model(config, device, should_train=True, verbose=False, state_dict=None,
                     weight_decay=config.get('weight_decay', 0.0),
                     config=config)
     except Exception as e:
-        wandb.finish()
         print("Exception in training")
         print(e)
         print(traceback.format_exc())
         #wandb.run.finish()
-
-
+    if config["use_wandb"]:
+        wandb.finish()
     return model

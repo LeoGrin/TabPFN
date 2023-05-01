@@ -48,7 +48,6 @@ def create_model(priordataloader_class, criterion, encoder_generator, emsize=200
           ):
 
     print(model_extra_args)
-    print(wandb)
     device = gpu_device if torch.cuda.is_available() else 'cpu:0'
     print(f'Using {device} device')
     #print(f'Using {torch.cuda.device_count()} GPUs')
