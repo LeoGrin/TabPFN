@@ -106,7 +106,7 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
             )
         else:
             print("setting neptune online")
-            run = neptune.init(
+            run = neptune.init_run(
                 project="leogrin/tabpfn-training",
                 api_token="eyJhcGlfYWRkcmVzcyI6Imh0dHBzOi8vYXBwLm5lcHR1bmUuYWkiLCJhcGlfdXJsIjoiaHR0cHM6Ly9hcHAubmVwdHVuZS5haSIsImFwaV9rZXkiOiJkNGY1NTJlYS0wNzgzLTQxM2EtOWFlZi02NmVmNmQ2MTRlNWIifQ=="
             )

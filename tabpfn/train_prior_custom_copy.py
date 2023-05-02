@@ -59,6 +59,7 @@ parser.add_argument('--random_feature_removal_min', type=float, default=0.)
 parser.add_argument('--sampling', type=str, default="mixed")
 parser.add_argument('--bptt', type=int, default=1152)
 parser.add_argument('--max_eval_pos', type=int, default=1000)
+parser.add_argument('--aggregate_k_gradients', type=int, default=8)
 
 
 # whether to return directly the classes instead of the probabilities
@@ -361,7 +362,7 @@ config = {'lr': 0.0001,
 params = ["lr", "p_categorical", "batch_size", "num_steps", "epochs", "correlation_proba_min",
           "correlation_proba_max", "correlation_strength_min", "correlation_strength_max",
           "random_feature_removal", "random_feature_removal_min", "num_features", "sampling",
-          "bptt", "max_eval_pos"]
+          "bptt", "max_eval_pos", "aggregate_k_gradients"]
 for param in params:
     if getattr(args, param) is not None:
         config[param] = getattr(args, param)
