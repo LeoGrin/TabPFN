@@ -79,6 +79,8 @@ parser.add_argument("--lr", type=float, default=None)
 parser.add_argument("--batch_size", type=int, default=None)
 # num steps
 parser.add_argument("--num_steps", type=int, default=None)
+# num epochs
+parser.add_argument("--epochs", type=int, default=None)
 # local rank
 parser.add_argument("--local_rank", type=int, default=None)
 
@@ -356,7 +358,7 @@ config = {'lr': 0.0001,
 
 
 
-params = ["lr", "p_categorical", "batch_size", "num_steps", "correlation_proba_min",
+params = ["lr", "p_categorical", "batch_size", "num_steps", "epochs", "correlation_proba_min",
           "correlation_proba_max", "correlation_strength_min", "correlation_strength_max",
           "random_feature_removal", "random_feature_removal_min", "num_features", "sampling",
           "bptt", "max_eval_pos"]

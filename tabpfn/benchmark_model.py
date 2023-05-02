@@ -268,16 +268,18 @@ if __name__ == """__main__""":
     #checkpoint = "trees55166_49voozm8_220"
     #checkpoint = "trees69859_eouc70o7_390"
     #checkpoint = "trees676_obqe7mfl_350"
-    #model = TabPFNClassifier(device=device, no_preprocess_mode=True)
+    checkpoint = "trees4315_080m7u0l_390"
+    model = TabPFNClassifier(device=device, no_preprocess_mode=True)
     #model = TabPFNClassifier(device=device)
     #model = GradientBoostingClassifier()
-    model = MLPClassifier()
-    #model_pytorch = load_model_no_train("model_checkpoints", f"model_{checkpoint}.pt", 0, model.c, 0)[0]
-    #model.model = model_pytorch
-    res = get_benchmark_performance(model, model_name="mlp_sklearn", one_hot_encoding=False, 
+    #model = MLPClassifier()
+    model_pytorch = load_model_no_train("model_checkpoints", f"model_{checkpoint}.pt", 0, model.c, 0)[0]
+    model.model = model_pytorch
+    res = get_benchmark_performance(model, model_name="tabpfn", one_hot_encoding=False, 
                                     random_rotation=False)
     #model_name = f"tabpfn_{checkpoint}"
-    model_name = "mlp_sklearn"
+    #model_name = "mlp_sklearn"
+    model_name = checkpoint
     #model_name = "gbt"
     print(res)
     res["model"] = model_name

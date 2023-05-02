@@ -230,8 +230,6 @@ def get_batch(batch_size, seq_len, num_features, hyperparameters, device=default
               , epoch=None, **kwargs):
     if 'multiclass_type' in hyperparameters and hyperparameters['multiclass_type'] == 'multi_node':
         num_outputs = num_outputs * hyperparameters['num_classes']
-        
-        
 
     correlation_strength = np.random.uniform(hyperparameters['correlation_strength_min'], hyperparameters['correlation_strength_max'])
     correlation_proba = np.random.uniform(hyperparameters['correlation_proba_min'], hyperparameters['correlation_proba_max'])
@@ -337,7 +335,10 @@ def get_batch(batch_size, seq_len, num_features, hyperparameters, device=default
             y = forest.predict(X)
         else:
             # uses flexible_categorical class_assigner
-            y = forest.predict_proba(X)[:, 0]
+            # select a class at random
+            predictions = forest.predict_proba(X)
+            i = np.random.randint(0, predictions.shape[1])
+            y = forest.predict_proba(X)[:, i]
         time_forest = time.time() - time_forest
         if np.random.random() < 0.001:
             print("Time to fit forest: ", time_forest)
