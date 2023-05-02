@@ -322,6 +322,7 @@ def get_model(config, device, should_train=True, verbose=False, state_dict=None,
                     , name = config['name']
                     , use_wandb=config["use_wandb"]
                     , wandb_offline=config["wandb_offline"]
+                    , get_openml_from_pickle=config["get_openml_from_pickle"]
                     , use_neptune=config["use_neptune"]
                     , validate_on_datasets=config["validate_on_datasets"]
                     , save_every=config['save_every']

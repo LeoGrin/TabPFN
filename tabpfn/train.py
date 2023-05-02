@@ -44,7 +44,9 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
           y_encoder_generator=None, pos_encoder_generator=None, decoder=None, extra_prior_kwargs_dict={}, scheduler=get_cosine_schedule_with_warmup,
           load_weights_from_this_state_dict=None, validation_period=10, single_eval_pos_gen=None, bptt_extra_samples=None, gpu_device='cuda:0',
           aggregate_k_gradients=1, verbose=True, style_encoder_generator=None, epoch_callback=None,
-          initializer=None, initialize_with_model=None, train_mixed_precision=False, efficient_eval_masking=True, use_wandb=False, wandb_offline=False, use_neptune=False, validate_on_datasets=False, name="default", save_every=20, config={}, **model_extra_args
+          initializer=None, initialize_with_model=None, train_mixed_precision=False, efficient_eval_masking=True, use_wandb=False, 
+          wandb_offline=False, use_neptune=False, validate_on_datasets=False, name="default", save_every=20, config={}, 
+          get_openml_from_pickle=False, **model_extra_args
           ):
     
     model, dl, device, n_out = create_model(priordataloader_class, criterion, encoder_generator, emsize, nhid, nlayers, nhead, dropout,
@@ -236,7 +238,7 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
                     except:
                         on_jean_zay = False
                         print("We're not on Jean Zay, loading the datasets from openml")
-                    if on_jean_zay:
+                    if on_jean_zay or get_openml_from_pickle:
                         measure_on_datasets = get_validation_performance(model_sklearn, datasets = [
                                 [44089, 44120, 44121, 44122, 44123, 44125, 44126, 44128, 44129, 44130, 45022,
                                     45021, 45020, 45019, 45028, 45026],
