@@ -262,10 +262,18 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
                         **measure_on_datasets
                     }
                 if use_wandb:
-                    wandb.log(metric_dic)
+                    try:
+                        wandb.log(metric_dic)
+                    except Exception as e:
+                        print("Failed to log to wandb on epoch", epoch)
+                        print("Printing exception", e)
                 if use_neptune:
-                    for key, value in metric_dic.items():
-                        run["metrics/" + key].append(value)
+                    try:
+                        for key, value in metric_dic.items():
+                            run["metrics/" + key].append(value)
+                    except Exception as e:
+                        print("Failed to log to neptune on epoch", epoch)
+                        print("Printing exception", e)
                     
             
             if epoch % save_every == 0 and epoch > 0 and rank == 0:
