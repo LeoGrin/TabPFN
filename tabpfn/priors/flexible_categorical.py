@@ -202,14 +202,14 @@ class FlexibleCategorical(torch.nn.Module):
             print('Flex Forward Block 4', round(time.time() - start, 3))
             start = time.time()
         if self.h['normalize_by_used_features']:
-            x = normalize_by_used_features_f(x, self.h['num_features_used'], self.args['num_features'], normalize_with_sqrt=self.h.get('normalize_with_sqrt',False))
+            x = normalize_by_used_features_f(x, x.shape[2], self.args['num_features'], normalize_with_sqrt=self.h.get('normalize_with_sqrt',False))
         if time_it:
             print('Flex Forward Block 5', round(time.time() - start, 3))
 
         start = time.time()
         # Append empty features if enabled
         x = torch.cat(
-            [x, torch.zeros((x.shape[0], x.shape[1], self.args['num_features'] - self.h['num_features_used'])
+            [x, torch.zeros((x.shape[0], x.shape[1], self.args['num_features'] - x.shape[2])
                             ,device=self.args['device'])
              ], -1)
         if time_it:
