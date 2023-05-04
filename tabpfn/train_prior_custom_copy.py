@@ -366,15 +366,9 @@ config = {'lr': 0.0001,
 
 
 
-params = ["lr", "p_categorical", "batch_size", "num_steps", "epochs", "correlation_proba_min",
-          "correlation_proba_max", "correlation_strength_min", "correlation_strength_max",
-          "random_feature_removal", "random_feature_removal_min", "num_features", "sampling",
-          "bptt", "max_eval_pos", "aggregate_k_gradients", "get_openml_from_pickle", "curriculum",
-          "curriculum_step", "curriculum_tol", "curriculum_start", "n_relevant_features_min", "n_relevant_features_min"]
-for param in params:
-    if getattr(args, param) is not None:
-        config[param] = getattr(args, param)
-        print(f"Using {param}={getattr(args, param)}")
+config = {**config, **args.__dict__}
+for param_name, param_value in args.__dict__.items():
+        print(f"Using {param_name}={param_value}")
         
 
 config["num_features_no_pad"] = config["num_features"] if not args.curriculum else args.curriculum_start

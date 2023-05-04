@@ -336,8 +336,9 @@ def get_batch(batch_size, seq_len, num_features, hyperparameters, device=default
         else:
             # uses flexible_categorical class_assigner
             # select a class at random
-            predictions = forest.predict_proba(X)
-            i = np.random.randint(0, predictions.shape[1])
+            #predictions = forest.predict_proba(X)
+            #i = np.random.randint(0, predictions.shape[1])
+            i = 0
             y = forest.predict_proba(X)[:, i]
         time_forest = time.time() - time_forest
         if np.random.random() < 0.001:

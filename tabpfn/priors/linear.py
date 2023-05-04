@@ -113,8 +113,7 @@ def get_batch(batch_size, seq_len, num_features, hyperparameters, device=default
             number_of_features_to_remove = int(np.random.uniform(p_feature_removed_min * X.shape[1], p_feature_removed_max * X.shape[1]))
             number_of_features_to_remove = min(number_of_features_to_remove, X.shape[1] -3) # make sure we have at least 3 features
         if np.random.random() < 0.01:
-            print("num features", X.shape[1])
-            print('number_of_features_to_remove', number_of_features_to_remove)
+            print("num features", X.shape[1], 'number_of_features_to_remove', number_of_features_to_remove)
         features_to_remove = np.random.choice(X.shape[1], number_of_features_to_remove, replace=False)
         X = np.delete(X, features_to_remove, axis=1)
         # fix the categorical features
@@ -184,6 +183,10 @@ def get_batch(batch_size, seq_len, num_features, hyperparameters, device=default
     start = time.time()
     data = torch.normal(mean=torch.zeros((seq_len, batch_size, num_features)), 
                         std=torch.ones((seq_len, batch_size, num_features)))
+    # if hyperparameters["positive_only"]:
+    #     data = torch.abs(data)
+    # if hyperparameters["proba_zero"] > 0:
+    #     data = torch.where(torch.rand_like(data) < hyperparameters["proba_zero"], torch.zeros_like(data), data)
     if time_it:
         print(f"Sampling for the batch took {time.time() - start} seconds")
     #data = np.random.normal(0, 1, (seq_len, batch_size, num_features))
