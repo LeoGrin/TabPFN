@@ -297,7 +297,7 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
                     new_max_num_features = min(extra_prior_kwargs_dict["hyperparameters"]['num_features_no_pad'] + curriculum_step, extra_prior_kwargs_dict['num_features'])
                     print("Going from ", extra_prior_kwargs_dict["hyperparameters"]['num_features_no_pad'], " to ", new_max_num_features)
                     extra_prior_kwargs_dict["hyperparameters"]['num_features_no_pad'] = new_max_num_features
-                    extra_prior_kwargs_dict['num_features_used'] = {'num_features_func': uniform_int_sampler_f(3, new_max_num_features)}
+                    #extra_prior_kwargs_dict['num_features_used'] = {'num_features_func': uniform_int_sampler_f(3, new_max_num_features)}
                     dl, validation_dl, _ = create_dataloader(priordataloader_class, criterion, encoder_generator, emsize, nhid, nlayers, nhead, dropout,
                                                     epochs, steps_per_epoch, batch_size, bptt, lr, weight_decay, warmup_epochs, input_normalization,
                                                     y_encoder_generator, pos_encoder_generator, decoder, extra_prior_kwargs_dict, scheduler,
@@ -342,6 +342,7 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
                         "balanced_acc": balanced_acc_tabpfn,
                         "mean_diff_balanced_acc": mean_diff_balanced_acc,
                         "mean_relative_diff_balanced_acc": mean_relative_diff_balanced_acc,
+                        "num_features_no_pad": extra_prior_kwargs_dict["hyperparameters"]['num_features_no_pad'],
                         "val_loss": val_score,
                         "lr": optimizer.param_groups[0]['lr'],
                         "time_to_get_batch": time_to_get_batch,

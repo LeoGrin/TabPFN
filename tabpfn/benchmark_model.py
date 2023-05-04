@@ -188,7 +188,7 @@ def get_benchmark_performance(model, metric="accuracy", suites=[337, 334, "cc18"
         else:
             results_baselines = {}
         accepted_tasks = []
-        #suite_id = str(suite_id) + "_large"
+        suite_id = str(suite_id)# + "_large"
         for task_id in tasks:
             for seed in range(n_iter):
                 print("Task id: {}".format(task_id))
@@ -239,13 +239,13 @@ def get_benchmark_performance(model, metric="accuracy", suites=[337, 334, "cc18"
                 #     indices = rng.choice(X_test.shape[0], 10000, replace=False)
                 #     X_test = X_test[indices]
                 #     y_test = y_test[indices]
-                # print("X_train", X_train.shape)
+                #print("X_train", X_train.shape)
                 if len(X) > 1300:
                     X_train, X_test, y_train, y_test = sklearn.model_selection.train_test_split(X, y, train_size=1024, random_state=rng)
                 else:
                     X_train, X_test, y_train, y_test = sklearn.model_selection.train_test_split(X, y, random_state=rng)
                 #Evaluate the model by computing the accuracy
-                model.fit(X_train, y_train)#, overwrite_warning=True)
+                model.fit(X_train, y_train, overwrite_warning=True)
                 y_pred = model.predict(X_test)
                 score = accuracy_score(y_test, y_pred)
                 print("accuracy", score)
@@ -268,25 +268,29 @@ if __name__ == """__main__""":
     #checkpoint = "trees55166_49voozm8_220"
     #checkpoint = "trees69859_eouc70o7_390"
     #checkpoint = "trees676_obqe7mfl_350"
+    #checkpoint = "trees7329_6qspdk92_400"
     #checkpoint = "trees4315_080m7u0l_390"
-    checkpoint = "trees97149_stz4qj1z_180"
-    model = TabPFNClassifier(device=device, no_preprocess_mode=True)
+    #checkpoint = "trees97149_stz4qj1z_180"
+    model = TabPFNClassifier(device=device)#, no_preprocess_mode=True)
     #model = TabPFNClassifier(device=device)
     #model = GradientBoostingClassifier()
+    #model = GradientBoostingClassifier()
     #model = MLPClassifier()
-    model_pytorch = load_model_no_train("model_checkpoints", f"model_{checkpoint}.pt", 0, model.c, 0)[0]
-    model.model = model_pytorch
-    res = get_benchmark_performance(model, model_name="tabpfn", one_hot_encoding=False, 
-                                    random_rotation=False)
+    #model_pytorch = load_model_no_train("model_checkpoints", f"model_{checkpoint}.pt", 0, model.c, 0)[0]
+    #model.model = model_pytorch
+    model_name = "tabpfn"
+    res = get_benchmark_performance(model, model_name=model_name, one_hot_encoding=False, 
+                                    random_rotation=False,)
     #model_name = f"tabpfn_{checkpoint}"
     #model_name = "mlp_sklearn"
-    model_name = checkpoint
+    #model_name = model_name
+    #model_name = "gbt"
     #model_name = "gbt"
     print(res)
     res["model"] = model_name
     results = pd.read_csv("results_benchmark.csv")
     # remove old results
-    results = results[results["model"] != model_name]
+    #results = results[results["model"] != model_name]
     # add new results
     results = pd.concat([results, res])
     results.to_csv(f"results_benchmark.csv")
