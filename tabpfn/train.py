@@ -84,6 +84,7 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
         lr = get_openai_lr(model)
         print(f"Using OpenAI max lr of {lr}.")
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
+    print("scheduler", scheduler)
     scheduler = scheduler(optimizer, warmup_epochs, epochs if epochs is not None else 100) # when training for fixed time lr schedule takes 100 steps
 
     scaler = GradScaler() if train_mixed_precision else None

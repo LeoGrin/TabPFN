@@ -199,7 +199,8 @@ def get_meta_gp_prior_hyperparameters(config):
     return config
 
 
-def get_model(config, device, should_train=True, verbose=False, state_dict=None, epoch_callback=None):
+def get_model(config, device, should_train=True, verbose=False, state_dict=None, epoch_callback=None,
+              scheduler=None):
     import tabpfn.priors as priors
     from tabpfn.train import train, Losses
     extra_kwargs = {}
@@ -320,6 +321,7 @@ def get_model(config, device, should_train=True, verbose=False, state_dict=None,
                     , loss
                     , encoder
                     , name = config['name']
+                    , scheduler = scheduler
                     , use_wandb=config["use_wandb"]
                     , wandb_offline=config["wandb_offline"]
                     , curriculum=config["curriculum"]

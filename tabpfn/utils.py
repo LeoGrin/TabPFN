@@ -8,6 +8,8 @@ import itertools
 import torch
 from torch import nn
 from torch.optim.lr_scheduler import LambdaLR
+import torch.optim.lr_scheduler as lr_scheduler
+
 
 # copied from huggingface
 def get_cosine_schedule_with_warmup(optimizer, num_warmup_steps, num_training_steps, num_cycles=0.5, last_epoch=-1):
@@ -23,6 +25,20 @@ def get_cosine_schedule_with_warmup(optimizer, num_warmup_steps, num_training_st
         return max(0.0, 0.5 * (1.0 + math.cos(math.pi * float(num_cycles) * 2.0 * progress)))
 
     return LambdaLR(optimizer, lr_lambda, last_epoch)
+
+def get_no_op_scheduler(optimizer, num_warmup_steps, num_training_steps, num_cycles=0.5, last_epoch=-1):
+    class NoOpScheduler(lr_scheduler._LRScheduler):
+        def __init__(self, optimizer, last_epoch=-1):
+            super(NoOpScheduler, self).__init__(optimizer, last_epoch)
+
+        def get_lr(self):
+            return [base_lr for base_lr in self.base_lrs]
+    return NoOpScheduler(optimizer, last_epoch)
+    
+    
+
+  
+  
 
 # copied from huggingface
 def get_restarting_cosine_schedule_with_warmup(optimizer, num_warmup_steps, num_training_steps, steps_per_restart, num_cycles=0.5, last_epoch=-1):

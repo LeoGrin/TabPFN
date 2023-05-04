@@ -67,6 +67,7 @@ parser.add_argument('--curriculum', action='store_true')
 parser.add_argument('--curriculum_step', type=int, default=10)
 parser.add_argument('--curriculum_tol', type=float, default=0.1)
 parser.add_argument('--curriculum_start', type=int, default=5)
+parser.add_argument('--scheduler', type=str, default="cosine")
 
 
 # whether to return directly the classes instead of the probabilities
@@ -82,13 +83,13 @@ parser.add_argument('--device', type=int, default=0)
 parser.add_argument('--name', type=str, default='default')
 parser.add_argument('--save_every', type=int, default=30)
 # learning rate
-parser.add_argument("--lr", type=float, default=None)
+parser.add_argument("--lr", type=float, default=0.0001)
 # batch size
-parser.add_argument("--batch_size", type=int, default=None)
+parser.add_argument("--batch_size", type=int, default=64)
 # num steps
-parser.add_argument("--num_steps", type=int, default=None)
+parser.add_argument("--num_steps", type=int, default=128)
 # num epochs
-parser.add_argument("--epochs", type=int, default=None)
+parser.add_argument("--epochs", type=int, default=400)
 # local rank
 parser.add_argument("--local_rank", type=int, default=None)
 
@@ -250,7 +251,7 @@ config = {'lr': 0.0001,
   'eval_positions': None,
   'sampling': 'mixed',
   'epochs': 400,
-  'num_steps': 128,
+  #'num_steps': 128,
   'verbose': False,
   'pre_sample_causes': True,
   'multiclass_type': 'rank',
@@ -363,12 +364,21 @@ config = {'lr': 0.0001,
   'use_seperate_decoder': False,
   'attend_to_global_tokens_only_at_test': False,
   "max_eval_pos": 1000}
-
+    
 
 
 config = {**config, **args.__dict__}
 for param_name, param_value in args.__dict__.items():
         print(f"Using {param_name}={param_value}")
+        
+if args.scheduler == "cosine":
+  from tabpfn.utils import get_cosine_schedule_with_warmup
+  scheduler = get_cosine_schedule_with_warmup
+elif args.scheduler == "none":
+  from tabpfn.utils import get_no_op_scheduler
+  scheduler = get_no_op_scheduler
+else:
+  raise ValueError(f"Unknown scheduler {args.scheduler}")
         
 
 config["num_features_no_pad"] = config["num_features"] if not args.curriculum else args.curriculum_start
@@ -436,4 +446,5 @@ if args.checkpoint_file:
 ## Training
 # launch wandb run
 #TODO add validation evals
-model = get_model(config_sample, device, should_train=True, verbose=1, state_dict=checkpoint if args.checkpoint_file else None)
+model = get_model(config_sample, device, should_train=True, verbose=1, state_dict=checkpoint if args.checkpoint_file else None,
+                  scheduler=scheduler)
