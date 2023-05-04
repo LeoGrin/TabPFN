@@ -98,7 +98,6 @@ class PriorDataset(IterableDataset):
         if self.step >= self.num_steps:
             self.step -= self.num_steps
             self.epoch += 1
-        print("Num steps", self.num_steps, "Step", self.step)
         
 
         return (0, batch[0], batch[1]), batch[2], single_eval_pos # data (style, x, y), target, single_eval_pos

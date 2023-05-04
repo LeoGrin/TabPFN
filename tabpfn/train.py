@@ -25,8 +25,13 @@ from tqdm import tqdm
 import openml
 from tabpfn.scripts.transformer_prediction_interface import TabPFNClassifier
 from evaluate_model import get_validation_performance
-from create_model import create_model, load_model_no_train_from_pytorch
+from create_model import create_model, load_model_no_train_from_pytorch, create_dataloader
 import neptune
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import balanced_accuracy_score
+import numpy as np
+from priors.utils import uniform_int_sampler_f
+
 
 class Losses():
     gaussian = nn.GaussianNLLLoss(full=True, reduction='none')
@@ -46,10 +51,10 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
           aggregate_k_gradients=1, verbose=True, style_encoder_generator=None, epoch_callback=None,
           initializer=None, initialize_with_model=None, train_mixed_precision=False, efficient_eval_masking=True, use_wandb=False, 
           wandb_offline=False, use_neptune=False, validate_on_datasets=False, name="default", save_every=20, config={}, 
-          get_openml_from_pickle=False, **model_extra_args
+          get_openml_from_pickle=False, curriculum=False, curriculum_tol=0.1, curriculum_step=1, curriculum_start=5, **model_extra_args
           ):
     
-    model, dl, device, n_out = create_model(priordataloader_class, criterion, encoder_generator, emsize, nhid, nlayers, nhead, dropout,
+    model, dl, device, n_out, validation_dl = create_model(priordataloader_class, criterion, encoder_generator, emsize, nhid, nlayers, nhead, dropout,
                                                        epochs, steps_per_epoch, batch_size, bptt, lr, weight_decay, warmup_epochs, input_normalization,
                                                        y_encoder_generator, pos_encoder_generator, decoder, extra_prior_kwargs_dict, scheduler,
                                                        load_weights_from_this_state_dict, validation_period, single_eval_pos_gen, bptt_extra_samples, gpu_device,
@@ -116,7 +121,7 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
         run["config"] = config
 
     
-    def train_epoch():
+    def train_epoch(dl, validation_dl):
         
         model.train()  # Turn on the train mode
         total_loss = 0.
@@ -159,6 +164,7 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
                         var_pred = output[..., 1].abs()
                         losses = criterion(mean_pred.flatten(), targets.to(device, non_blocking=True).flatten(), var=var_pred.flatten())
                     elif isinstance(criterion, (nn.MSELoss, nn.BCEWithLogitsLoss)):
+                        print("here")
                         losses = criterion(output.flatten(), targets.to(device, non_blocking=True).flatten())
                     elif isinstance(criterion, nn.CrossEntropyLoss):
                         losses = criterion(output.reshape(-1, n_out), targets.to(device, non_blocking=True).long().flatten())
@@ -167,6 +173,9 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
                     losses = losses.view(*output.shape[0:2])
                     loss, nan_share = utils.torch_nanmean(losses.mean(0), return_nanshare=True)
                     loss = loss / aggregate_k_gradients
+                    
+
+                    
 
                 if scaler: loss = scaler.scale(loss)
                 before_backward = time.time()
@@ -198,19 +207,77 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
                     total_positional_losses += losses.mean(1).cpu().detach() if single_eval_pos is None else \
                         nn.functional.one_hot(torch.tensor(single_eval_pos), bptt)*\
                         losses[:bptt-single_eval_pos].mean().cpu().detach()
-
                     total_positional_losses_recorded += torch.ones(bptt) if single_eval_pos is None else \
                         nn.functional.one_hot(torch.tensor(single_eval_pos), bptt)
                 nan_steps += nan_share
 
                 ignore_steps += (targets == -100).float().mean()
 
-
             before_get_batch = time.time()
         print("Epoch Loss", total_loss / steps_per_epoch)
+        # if prior is linear, compute the loss for the lasso
+        print("Computing lasso vs tabpfn")
+        try:
+            pbar_val = tqdm(enumerate(validation_dl))
+            print("len(validation_dl)", len(validation_dl))
+            balanced_acc_tabpfn_adjusted_list = []
+            balanced_acc_lasso_adjusted_list = []
+            balanced_acc_tabpfn_list = []
+            balanced_acc_lasso_list = []
+            for batch, (data, targets, single_eval_pos) in pbar_val:
+                with torch.no_grad():
+                    if bptt_extra_samples is None:
+                        single_eval_pos = single_eval_pos_gen() if callable(single_eval_pos_gen) else single_eval_pos_gen
+                    else:
+                        single_eval_pos = targets.shape[0] - bptt_extra_samples
+
+                        
+                    output = model(tuple(e.to(device, non_blocking=True) if torch.is_tensor(e) else e for e in data) if (isinstance(data, tuple) or isinstance(data, list)) else data.to(device, non_blocking=True)
+                                    , single_eval_pos=single_eval_pos)
+                    lasso = LogisticRegression(penalty='l1', max_iter=1000, solver='liblinear')
+                    X_cpu = data[1].cpu().numpy()
+                    y_cpu = data[2].cpu().numpy()
+                    for i in range(X_cpu.shape[1]):
+                        X = X_cpu[:, i, :]
+                        y = y_cpu[:, i]
+                        X_train, X_test = X[:single_eval_pos], X[single_eval_pos:]
+                        y_train, y_test = y[:single_eval_pos], y[single_eval_pos:]
+                        if len(np.unique(y_train)) == 1:
+                            print("All samples in the training set belong to the same class, skipping")
+                            continue
+                        lasso.fit(X_train, y_train)
+                        # compute balanced accuracy
+                        preds = lasso.predict(X_test)
+                        balanced_acc_adjusted = balanced_accuracy_score(y_test, preds, adjusted=True)
+                        balanced_acc = balanced_accuracy_score(y_test, preds)
+                        preds_tabpfn = output[:, i, :].detach().cpu().numpy().argmax(axis=1)
+                        balanced_acc_tabpfn_adjusted = balanced_accuracy_score(y_test, preds_tabpfn, adjusted=True)
+                        balanced_acc_tabpfn = balanced_accuracy_score(y_test, preds_tabpfn)
+                        balanced_acc_tabpfn_adjusted_list.append(balanced_acc_tabpfn_adjusted)
+                        balanced_acc_lasso_adjusted_list.append(balanced_acc_adjusted)
+                        balanced_acc_tabpfn_list.append(balanced_acc_tabpfn)
+                        balanced_acc_lasso_list.append(balanced_acc)
+            mean_diff_balanced_acc_adjusted = np.mean(np.array(balanced_acc_lasso_adjusted_list) - np.array(balanced_acc_tabpfn_adjusted_list))
+            balanced_acc_lasso_adjusted = np.mean(balanced_acc_lasso_adjusted_list)
+            balanced_acc_tabpfn_adjusted = np.mean(balanced_acc_tabpfn_adjusted_list)
+            mean_relative_diff_balanced_acc = np.mean((np.array(balanced_acc_lasso_list) - np.array(balanced_acc_tabpfn_list)) / np.array(balanced_acc_lasso_list))
+            
+            print("Balanced accuracy tabpfn (adjusted): ", balanced_acc_tabpfn_adjusted)
+            print("Balanced accuracy lasso (adjusted): ", balanced_acc_lasso_adjusted)
+            print("Mean difference balanced accuracy adjusted: ", mean_diff_balanced_acc_adjusted)
+            print("Balanced accuracy tabpfn: ", np.mean(balanced_acc_tabpfn_list))
+            print("Balanced accuracy lasso: ", np.mean(balanced_acc_lasso_list))
+            print("Mean relative difference balanced accuracy: ", mean_relative_diff_balanced_acc)
+        except:
+            print("Could not compute lasso")
+            mean_diff_balanced_acc_adjusted = np.nan
+            balanced_acc_tabpfn_adjusted = np.nan
+            mean_relative_diff_balanced_acc = np.nan
+            
+        
         return total_loss / steps_per_epoch, (total_positional_losses / total_positional_losses_recorded).tolist(),\
-               time_to_get_batch, forward_time, step_time, nan_steps.cpu().item()/(batch+1),\
-               ignore_steps.cpu().item()/(batch+1)
+            time_to_get_batch, forward_time, step_time, nan_steps.cpu().item()/(batch+1),\
+            ignore_steps.cpu().item()/(batch+1), balanced_acc_tabpfn_adjusted, mean_diff_balanced_acc_adjusted, mean_relative_diff_balanced_acc
 
     total_loss = float('inf')
     total_positional_losses = float('inf')
@@ -218,8 +285,26 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
         for epoch in (range(1, epochs + 1) if epochs is not None else itertools.count(1)):
 
             epoch_start_time = time.time()
-            total_loss, total_positional_losses, time_to_get_batch, forward_time, step_time, nan_share, ignore_share =\
-                train_epoch()
+            total_loss, total_positional_losses, time_to_get_batch, forward_time, step_time, nan_share,\
+            ignore_share, balanced_acc_tabpfn, mean_diff_balanced_acc, mean_relative_diff_balanced_acc =\
+                train_epoch(dl, validation_dl)
+            if curriculum:
+                #TODO make this more flexible
+                if mean_relative_diff_balanced_acc < curriculum_tol:
+                    print("Mean relative difference balanced accuracy is below tolerance, increasing number of features")
+                    print("Mean relative difference balanced accuracy: ", mean_relative_diff_balanced_acc)
+                    print("Max number of features: ", extra_prior_kwargs_dict["hyperparameters"]['num_features'])
+                    new_max_num_features = min(extra_prior_kwargs_dict["hyperparameters"]['num_features_no_pad'] + curriculum_step, extra_prior_kwargs_dict['num_features'])
+                    print("Going from ", extra_prior_kwargs_dict["hyperparameters"]['num_features_no_pad'], " to ", new_max_num_features)
+                    extra_prior_kwargs_dict["hyperparameters"]['num_features_no_pad'] = new_max_num_features
+                    extra_prior_kwargs_dict['num_features_used'] = {'num_features_func': uniform_int_sampler_f(3, new_max_num_features)}
+                    dl, validation_dl, _ = create_dataloader(priordataloader_class, criterion, encoder_generator, emsize, nhid, nlayers, nhead, dropout,
+                                                    epochs, steps_per_epoch, batch_size, bptt, lr, weight_decay, warmup_epochs, input_normalization,
+                                                    y_encoder_generator, pos_encoder_generator, decoder, extra_prior_kwargs_dict, scheduler,
+                                                    load_weights_from_this_state_dict, validation_period, single_eval_pos_gen, bptt_extra_samples, gpu_device,
+                                                    aggregate_k_gradients, verbose, style_encoder_generator, epoch_callback,
+                                                    initializer, initialize_with_model, train_mixed_precision, efficient_eval_masking, use_wandb, name, save_every, **model_extra_args)
+                    
             if hasattr(dl, 'validate') and epoch % validation_period == 0:
                 with torch.no_grad():
                     val_score = dl.validate(model)
@@ -254,6 +339,9 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
                 metric_dic = {
                         "epoch": epoch,
                         "train_loss": total_loss,
+                        "balanced_acc": balanced_acc_tabpfn,
+                        "mean_diff_balanced_acc": mean_diff_balanced_acc,
+                        "mean_relative_diff_balanced_acc": mean_relative_diff_balanced_acc,
                         "val_loss": val_score,
                         "lr": optimizer.param_groups[0]['lr'],
                         "time_to_get_batch": time_to_get_batch,

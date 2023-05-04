@@ -56,12 +56,17 @@ parser.add_argument('--correlation_strength_min', type=float, default=0.)
 parser.add_argument('--correlation_strength_max', type=float, default=0.)
 parser.add_argument('--random_feature_removal', type=float, default=0.)
 parser.add_argument('--random_feature_removal_min', type=float, default=0.)
+parser.add_argument("--n_relevant_features_max", type=int, default=None)
+parser.add_argument('--n_relevant_features_min', type=int, default=None)
 parser.add_argument('--sampling', type=str, default="mixed")
 parser.add_argument('--bptt', type=int, default=1152)
 parser.add_argument('--max_eval_pos', type=int, default=1000)
 parser.add_argument('--aggregate_k_gradients', type=int, default=8)
 parser.add_argument('--get_openml_from_pickle', action='store_true')
 parser.add_argument('--curriculum', action='store_true')
+parser.add_argument('--curriculum_step', type=int, default=10)
+parser.add_argument('--curriculum_tol', type=float, default=0.1)
+parser.add_argument('--curriculum_start', type=int, default=5)
 
 
 # whether to return directly the classes instead of the probabilities
@@ -364,15 +369,22 @@ config = {'lr': 0.0001,
 params = ["lr", "p_categorical", "batch_size", "num_steps", "epochs", "correlation_proba_min",
           "correlation_proba_max", "correlation_strength_min", "correlation_strength_max",
           "random_feature_removal", "random_feature_removal_min", "num_features", "sampling",
-          "bptt", "max_eval_pos", "aggregate_k_gradients", "get_openml_from_pickle", "curriculum"]
+          "bptt", "max_eval_pos", "aggregate_k_gradients", "get_openml_from_pickle", "curriculum",
+          "curriculum_step", "curriculum_tol", "curriculum_start", "n_relevant_features_min", "n_relevant_features_min"]
 for param in params:
     if getattr(args, param) is not None:
         config[param] = getattr(args, param)
         print(f"Using {param}={getattr(args, param)}")
+        
 
-config["seq_len_used"] = 50
+config["num_features_no_pad"] = config["num_features"] if not args.curriculum else args.curriculum_start
+# a bit confusing but max_num_features is the number of features actually used, while num_feature is the total number including padding
+#TODO clean that up because max_num_features is also used elsewhere
+config["seq_len_used"] = 50 # I think this has no effect
 config["num_classes"] = 10#uniform_int_sampler_f(2, config['max_num_classes']) #TODO: make it work with return_classes
-config["num_features_used"] = {'num_features_func': uniform_int_sampler_f(3, config['num_features'])}
+config["num_features_used"] = {'num_features_func': uniform_int_sampler_f(3, config["num_features_no_pad"])} #TODO get rid of differentiable
+
+
 
 
 config["remove_outliers_in_flexible_categorical"] = True

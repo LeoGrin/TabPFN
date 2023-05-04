@@ -26,21 +26,19 @@ def get_batch(batch_size, seq_len, num_features, hyperparameters, device=default
     correlation_proba = np.random.uniform(hyperparameters['correlation_proba_min'], hyperparameters['correlation_proba_max'])
     time_it = False
     
-    #kinda hacky to do it here 
-    if hyperparameters["curriculum"]:
-        epoch_max = 300
-        print("EPOCH", epoch)
-        print("NUM FEATURES", num_features)
-        num_features_original = num_features
-        if num_features > 5:
-            num_features = 5 + int((num_features - 5) * min((epoch / epoch_max), 1))
-        print("NUM FEATURES 2", num_features)
-        p_feature_removed_max = 1 - (1 - hyperparameters["random_feature_removal"]) * (num_features_original / num_features)
-        p_feature_removed_min = 1 - (1 - hyperparameters["random_feature_removal_min"]) * (num_features_original / num_features)
-    else:
-        p_feature_removed_max = hyperparameters["random_feature_removal"]
-        p_feature_removed_min = hyperparameters["random_feature_removal_min"]
-    
+    # #kinda hacky to do it here 
+    # if hyperparameters["curriculum"]:
+    #     epoch_max = 300
+    #     num_features_original = num_features
+    #     if num_features > 5:
+    #         num_features = 5 + int((num_features - 5) * min((epoch / epoch_max), 1))
+    #     p_feature_removed_max = 1 - (1 - hyperparameters["random_feature_removal"]) * (num_features_original / num_features)
+    #     p_feature_removed_min = 1 - (1 - hyperparameters["random_feature_removal_min"]) * (num_features_original / num_features)
+    # else:
+    #     p_feature_removed_max = hyperparameters["random_feature_removal"]
+    #     p_feature_removed_min = hyperparameters["random_feature_removal_min"]
+    p_feature_removed_max = hyperparameters["random_feature_removal"]
+    p_feature_removed_min = hyperparameters["random_feature_removal_min"]
 
 
     def get_seq(data=None):
@@ -108,8 +106,13 @@ def get_batch(batch_size, seq_len, num_features, hyperparameters, device=default
         X = data.reshape(-1, num_features)
         if hyperparameters.get("random_feature_removal", 0) > 0:
             # sample the number of features to remove
-            number_of_features_to_remove = int(np.random.uniform(p_feature_removed_min * X.shape[1], p_feature_removed_max * X.shape[1]))
-            number_of_features_to_remove = min(number_of_features_to_remove, X.shape[1] -3) # make sure we have at least 3 features
+            if not hyperparameters ["n_relevant_features_min"] is None:
+                assert p_feature_removed_min == 0
+                assert p_feature_removed_max == 0
+                number_of_features_to_remove = max(0, X.shape[1] - int(np.random.uniform(hyperparameters["n_relevant_features_min"], hyperparameters["n_relevant_features_max"])))
+            else:
+                number_of_features_to_remove = int(np.random.uniform(p_feature_removed_min * X.shape[1], p_feature_removed_max * X.shape[1]))
+                number_of_features_to_remove = min(number_of_features_to_remove, X.shape[1] -3) # make sure we have at least 3 features
             features_to_remove = np.random.choice(X.shape[1], number_of_features_to_remove, replace=False)
             X = np.delete(X, features_to_remove, axis=1)
             # fix the categorical features

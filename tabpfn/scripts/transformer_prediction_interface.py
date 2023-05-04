@@ -259,10 +259,6 @@ class TabPFNClassifier(BaseEstimator, ClassifierMixin):
         y_full = torch.tensor(y_full, device=self.device).float().unsqueeze(1)
 
         eval_pos = self.X_.shape[0]
-        print("interface")
-        print(X_full.shape)
-        print(y_full.shape)
-        print(eval_pos)
 
         prediction = transformer_predict(self.model[2], X_full, y_full, eval_pos,
                                          device=self.device,

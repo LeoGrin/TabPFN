@@ -264,11 +264,12 @@ def get_benchmark_performance(model, metric="accuracy", suites=[337, 334, "cc18"
     return res
 
 if __name__ == """__main__""":
-    device = "cuda:1"
+    device = "cuda:3"
     #checkpoint = "trees55166_49voozm8_220"
     #checkpoint = "trees69859_eouc70o7_390"
     #checkpoint = "trees676_obqe7mfl_350"
-    checkpoint = "trees4315_080m7u0l_390"
+    #checkpoint = "trees4315_080m7u0l_390"
+    checkpoint = "trees97149_stz4qj1z_180"
     model = TabPFNClassifier(device=device, no_preprocess_mode=True)
     #model = TabPFNClassifier(device=device)
     #model = GradientBoostingClassifier()
