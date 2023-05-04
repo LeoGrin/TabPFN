@@ -46,7 +46,7 @@ class Losses():
 
 def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=200, nlayers=6, nhead=2, dropout=0.0,
           epochs=10, steps_per_epoch=100, batch_size=200, bptt=10, lr=None, weight_decay=0.0, warmup_epochs=10, input_normalization=False,
-          y_encoder_generator=None, pos_encoder_generator=None, decoder=None, extra_prior_kwargs_dict={}, scheduler=get_cosine_schedule_with_warmup,
+          y_encoder_generator=None, pos_encoder_generator=None, decoder=None, extra_prior_kwargs_dict={}, scheduler_func=get_cosine_schedule_with_warmup,
           load_weights_from_this_state_dict=None, validation_period=10, single_eval_pos_gen=None, bptt_extra_samples=None, gpu_device='cuda:0',
           aggregate_k_gradients=1, verbose=True, style_encoder_generator=None, epoch_callback=None,
           initializer=None, initialize_with_model=None, train_mixed_precision=False, efficient_eval_masking=True, use_wandb=False, 
@@ -56,7 +56,7 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
     
     model, dl, device, n_out, validation_dl = create_model(priordataloader_class, criterion, encoder_generator, emsize, nhid, nlayers, nhead, dropout,
                                                        epochs, steps_per_epoch, batch_size, bptt, lr, weight_decay, warmup_epochs, input_normalization,
-                                                       y_encoder_generator, pos_encoder_generator, decoder, extra_prior_kwargs_dict, scheduler,
+                                                       y_encoder_generator, pos_encoder_generator, decoder, extra_prior_kwargs_dict, scheduler_func,
                                                        load_weights_from_this_state_dict, validation_period, single_eval_pos_gen, bptt_extra_samples, gpu_device,
                                                        aggregate_k_gradients, verbose, style_encoder_generator, epoch_callback,
                                                        initializer, initialize_with_model, train_mixed_precision, efficient_eval_masking, use_wandb, name, save_every, **model_extra_args)
@@ -84,8 +84,8 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
         lr = get_openai_lr(model)
         print(f"Using OpenAI max lr of {lr}.")
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
-    print("scheduler", scheduler)
-    scheduler = scheduler(optimizer, warmup_epochs, epochs if epochs is not None else 100) # when training for fixed time lr schedule takes 100 steps
+    print("scheduler", scheduler_func)
+    scheduler = scheduler_func(optimizer, warmup_epochs, epochs if epochs is not None else 100) # when training for fixed time lr schedule takes 100 steps
 
     scaler = GradScaler() if train_mixed_precision else None
 
@@ -305,6 +305,15 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
                                                     load_weights_from_this_state_dict, validation_period, single_eval_pos_gen, bptt_extra_samples, gpu_device,
                                                     aggregate_k_gradients, verbose, style_encoder_generator, epoch_callback,
                                                     initializer, initialize_with_model, train_mixed_precision, efficient_eval_masking, use_wandb, name, save_every, **model_extra_args)
+                    if config["reset_optim_on_curriculum_step"]:
+                        print("Resetting optimizer and scheduler")
+                        if lr is None:
+                            lr = get_openai_lr(model)
+                            print(f"Using OpenAI max lr of {lr}.")
+                        optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
+                        print("scheduler", scheduler)
+                        scheduler = scheduler_func(optimizer, warmup_epochs, epochs if epochs is not None else 100) # when training for fixed time lr schedule takes 100 steps
+
                     
             if hasattr(dl, 'validate') and epoch % validation_period == 0:
                 with torch.no_grad():

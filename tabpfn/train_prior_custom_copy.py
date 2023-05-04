@@ -68,6 +68,7 @@ parser.add_argument('--curriculum_step', type=int, default=10)
 parser.add_argument('--curriculum_tol', type=float, default=0.1)
 parser.add_argument('--curriculum_start', type=int, default=5)
 parser.add_argument('--scheduler', type=str, default="cosine")
+parser.add_argument("--reset_optim_on_curriculum_step", action='store_true')
 
 
 # whether to return directly the classes instead of the probabilities
