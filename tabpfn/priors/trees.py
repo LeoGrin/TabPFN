@@ -226,15 +226,15 @@ def randomize_leaves_func(forest, n_classes):
 
 
 
-def get_batch(batch_size, seq_len, num_features, hyperparameters, device=default_device, num_outputs=1, sampling='normal'
+def get_batch(batch_size, seq_len, num_features_max, num_features_sampler, hyperparameters, device=default_device, num_outputs=1, sampling='normal'
               , epoch=None, **kwargs):
     if 'multiclass_type' in hyperparameters and hyperparameters['multiclass_type'] == 'multi_node':
         num_outputs = num_outputs * hyperparameters['num_classes']
 
     correlation_strength = np.random.uniform(hyperparameters['correlation_strength_min'], hyperparameters['correlation_strength_max'])
     correlation_proba = np.random.uniform(hyperparameters['correlation_proba_min'], hyperparameters['correlation_proba_max'])
-
     def get_seq():
+        num_features = num_features_sampler()
         if sampling == 'normal':
             # generate a random covariance matrix
             cov = np.eye(num_features)
@@ -368,7 +368,13 @@ def get_batch(batch_size, seq_len, num_features, hyperparameters, device=default
 
     x, y = zip(*sample)
     y = torch.cat(y, 1).detach().squeeze(2)
+    #x = torch.cat(x, 1).detach()
+    # concat x and pad with zeros
+    # first pad with zeros to num_features_max
+    x = [torch.cat([x[i], torch.zeros((seq_len, 1, num_features_max - x[i].shape[-1]))], -1) for i in range(len(x))]
+    # then concat
     x = torch.cat(x, 1).detach()
+    
     
     return x, y, y
 

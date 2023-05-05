@@ -42,6 +42,7 @@ parser.add_argument('--max_depth_lambda', type=float, default=None)
 parser.add_argument('--checkpoint_file', type=str, default=None)
 
 parser.add_argument('--num_features', type=int, default=100)
+parser.add_argument('--num_classes', type=int, default=10)
 
 # p_categorical
 parser.add_argument('--p_categorical', type=float, default=0.)
@@ -67,6 +68,7 @@ parser.add_argument('--curriculum', action='store_true')
 parser.add_argument('--curriculum_step', type=int, default=10)
 parser.add_argument('--curriculum_tol', type=float, default=0.1)
 parser.add_argument('--curriculum_start', type=int, default=5)
+parser.add_argument('--criterion_curriculum', type=str, default='relative')
 parser.add_argument('--scheduler', type=str, default="cosine")
 parser.add_argument("--reset_optim_on_curriculum_step", action='store_true')
 # used to evaluate the model only on batches where the number of features is big enough
@@ -403,7 +405,6 @@ config["num_features_no_pad"] = config["num_features"] if not args.curriculum el
 # a bit confusing but max_num_features is the number of features actually used, while num_feature is the total number including padding
 #TODO clean that up because max_num_features is also used elsewhere
 config["seq_len_used"] = 50 # I think this has no effect
-config["num_classes"] = 10#uniform_int_sampler_f(2, config['max_num_classes']) #TODO: make it work with return_classes
 config["num_features_used"] = {'num_features_func': uniform_int_sampler_f(3, config["num_features_no_pad"])} #TODO get rid of differentiable
 
 

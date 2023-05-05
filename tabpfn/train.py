@@ -297,7 +297,11 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
                 train_epoch(dl, validation_dl)
             if curriculum:
                 #TODO make this more flexible
-                if mean_relative_diff_balanced_acc < curriculum_tol:
+                if config["criterion_curriculum"] == "relative":
+                    condition = mean_relative_diff_balanced_acc < curriculum_tol
+                elif config["criterion_curriculum"] == "absolute":
+                    condition = mean_diff_balanced_acc < curriculum_tol
+                if condition:
                     print("Mean relative difference balanced accuracy is below tolerance, increasing number of features")
                     print("Mean relative difference balanced accuracy: ", mean_relative_diff_balanced_acc)
                     print("Max number of features: ", extra_prior_kwargs_dict["hyperparameters"]['num_features'])
