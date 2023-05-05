@@ -106,12 +106,11 @@ def get_batch(batch_size, seq_len, num_features, hyperparameters, device=default
         X = data.reshape(-1, num_features)
         # sample the number of features to remove
         if not hyperparameters ["n_relevant_features_min"] is None:
-            assert p_feature_removed_min == 0
-            assert p_feature_removed_max == 0
             number_of_features_to_remove = max(0, X.shape[1] - int(np.random.uniform(hyperparameters["n_relevant_features_min"], hyperparameters["n_relevant_features_max"])))
+            number_of_features_to_remove = max(number_of_features_to_remove, int(X.shape[1] * p_feature_removed_min))
         else:
             number_of_features_to_remove = int(np.random.uniform(p_feature_removed_min * X.shape[1], p_feature_removed_max * X.shape[1]))
-            number_of_features_to_remove = min(number_of_features_to_remove, X.shape[1] -3) # make sure we have at least 3 features
+        number_of_features_to_remove = min(number_of_features_to_remove, X.shape[1] -3) # make sure we have at least 3 features
         if np.random.random() < 0.01:
             print("num features", X.shape[1], 'number_of_features_to_remove', number_of_features_to_remove)
         features_to_remove = np.random.choice(X.shape[1], number_of_features_to_remove, replace=False)
