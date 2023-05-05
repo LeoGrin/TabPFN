@@ -69,7 +69,14 @@ parser.add_argument('--curriculum_tol', type=float, default=0.1)
 parser.add_argument('--curriculum_start', type=int, default=5)
 parser.add_argument('--scheduler', type=str, default="cosine")
 parser.add_argument("--reset_optim_on_curriculum_step", action='store_true')
+# used to evaluate the model only on batches where the number of features is big enough
+parser.add_argument("--eval_prop_num_features", type=float, default=0.5)
+parser.add_argument("--sample_bigger_features", action='store_true')
 
+parser.add_argument("--test", action='store_true')
+
+
+parser.add_argument('--emsize', default=512, type=int) # sometimes even larger is better e.g. 1024
 
 # whether to return directly the classes instead of the probabilities
 parser.add_argument('--return_classes', action='store_true')
@@ -95,6 +102,11 @@ parser.add_argument("--epochs", type=int, default=400)
 parser.add_argument("--local_rank", type=int, default=None)
 
 args = parser.parse_args()
+
+if args.test:
+  args.wandb = False
+  args.neptune = False
+  args.num_steps = 8
 
 if args.name == 'default':
     if args.prior is None:
@@ -380,6 +392,11 @@ elif args.scheduler == "none":
   scheduler = get_no_op_scheduler
 else:
   raise ValueError(f"Unknown scheduler {args.scheduler}")
+
+config["nhead"] = config["emsize"] / 64
+assert config["nhead"] == int(config["nhead"]), "emsize must be a multiple of 64"
+config["nhead"] = int(config["nhead"])
+print(f"Using nhead={config['nhead']}")
         
 
 config["num_features_no_pad"] = config["num_features"] if not args.curriculum else args.curriculum_start
@@ -417,6 +434,7 @@ if args.prior is not None:
     config["return_classes"] = args.return_classes
     config["randomize_leaves"] = args.randomize_leaves
     print(f"Using {args.prior} prior with n_estimators_lambda={args.n_estimators_lambda}, n_estimators={args.n_estimators}, max_depth_lambda={args.max_depth_lambda}")
+
 
 
     

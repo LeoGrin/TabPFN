@@ -238,6 +238,13 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
                     lasso = LogisticRegression(penalty='l1', max_iter=1000, solver='liblinear')
                     X_cpu = data[1].cpu().numpy()
                     y_cpu = data[2].cpu().numpy()
+                    # find the number of all zeros columns
+                    n_zero_cols = len(np.where(~X_cpu.any(axis=0))[0]) / X_cpu.shape[1]
+                    print("num zero_cols", n_zero_cols)
+                    actual_num_features_no_pad = X_cpu.shape[2] - n_zero_cols
+                    if actual_num_features_no_pad < config["eval_prop_num_features"] * extra_prior_kwargs_dict["hyperparameters"]['num_features_no_pad']:
+                        print(f"Number of features in the prior is too small, skipping. Actual number of features: {actual_num_features_no_pad}, required number of features: {config['eval_prop_num_features'] * extra_prior_kwargs_dict['hyperparameters']['num_features_no_pad']}")
+                        continue
                     for i in range(X_cpu.shape[1]):
                         X = X_cpu[:, i, :]
                         y = y_cpu[:, i]

@@ -146,9 +146,9 @@ def get_batch(batch_size, seq_len, num_features, hyperparameters, device=default
         # random matrix on X
         W = np.random.normal(0, 1, (X.shape[1], 1))
         # random bias on X
-        b = np.random.normal(0, 1, (1))
+       #b = np.random.normal(0, 1, (1))
         # Generate the target
-        y = np.dot(X, W) + b
+        y = np.dot(X, W) #+ b
         if time_it:
             print(f"Generating target took {time.time() - start} seconds")
         start = time.time()

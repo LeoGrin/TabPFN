@@ -63,8 +63,8 @@ def create_dataloader(priordataloader_class, criterion, encoder_generator, emsiz
     dataloader_args = {"num_workers":10, "pin_memory":True, "persistent_workers":True, "prefetch_factor":3}
     #dataloader_args = {"num_workers":0}#10, "pin_memory":True, "persistent_workers":True# "prefetch_factor":3}
     dl = priordataloader_class(dataloader_args, get_batch_args)
-    validation_get_batch_args = {"num_steps":16, "batch_size":4, "eval_pos_seq_len_sampler":eval_pos_seq_len_sampler, "seq_len_maximum":bptt+(bptt_extra_samples if bptt_extra_samples else 0), "device":device, **extra_prior_kwargs_dict}
-    validation_dataloader_args = {"num_workers":0}
+    validation_get_batch_args = {"num_steps":64, "batch_size":4, "eval_pos_seq_len_sampler":eval_pos_seq_len_sampler, "seq_len_maximum":bptt+(bptt_extra_samples if bptt_extra_samples else 0), "device":device, **extra_prior_kwargs_dict}
+    validation_dataloader_args = {"num_workers":2}
     validation_dl = priordataloader_class(validation_dataloader_args, validation_get_batch_args)
     return dl, validation_dl, device
 
@@ -372,6 +372,12 @@ def load_model_no_train(path, filename, device, config_sample=None, verbose=0):
         os.path.join(path, filename), map_location='cpu')
     if len(loaded_data) == 3:
         model_state, optimizer_state, config_sample = loaded_data
+    elif len(loaded_data) == 4:
+        print('WARNING: Loading model with scheduler state dict')
+        model_state = loaded_data["model_state_dict"]
+        optimizer_state = loaded_data["optimizer_state_dict"]
+        scheduler_state = loaded_data["scheduler_state_dict"]
+        epoch = loaded_data["epoch"]
     else:
         model_state = loaded_data
     if ('differentiable_hyperparameters' in config_sample

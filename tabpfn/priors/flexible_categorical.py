@@ -105,7 +105,13 @@ class FlexibleCategorical(torch.nn.Module):
         #print("Num features used", self.h['num_features_used'])
         #print("Features no pad", self.h['num_features_no_pad'])
         #self.args_passed.update({'num_features': self.h['num_features_used']})
-        features_sampler = uniform_int_sampler_f(3, self.h['num_features_no_pad']) #TODO this should be set in config
+        if hyperparameters["sample_bigger_features"]:
+            if torch.rand(1) > 0.5:
+                features_sampler = uniform_int_sampler_f(3, self.h['num_features_no_pad'])
+            else:
+                features_sampler = uniform_int_sampler_f(self.h['num_features_no_pad'] // 2, self.h['num_features_no_pad'])
+        else:
+            features_sampler = uniform_int_sampler_f(3, self.h['num_features_no_pad']) #TODO this should be set in config
         self.h['num_features_used'] = features_sampler()
         self.args_passed.update({'num_features': self.h['num_features_used']})
         self.get_batch = get_batch
