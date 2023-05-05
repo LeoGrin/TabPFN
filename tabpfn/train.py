@@ -97,7 +97,7 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
             print("setting wandb offline")
             os.environ['WANDB_MODE'] = 'offline'
         print("initializing wandb")
-        wandb.init(project="tabpfn_training", entity="leogrin")
+        wandb.init(project="tabpfn_training-2", entity="leogrin")
         wandb.config.update(config)
         print("wandb initialized")
         print("name", name)
