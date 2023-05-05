@@ -19,7 +19,7 @@ from sklearn.ensemble import ExtraTreesClassifier
 from sklearn.preprocessing import OneHotEncoder, LabelEncoder
 from sklearn.compose import ColumnTransformer
 
-def get_batch(batch_size, seq_len, num_features, hyperparameters, device=default_device, num_outputs=1, sampling='normal'
+def get_batch(batch_size, seq_len, num_features_max, num_features_sampler, hyperparameters, device=default_device, num_outputs=1, sampling='normal'
               , epoch=None, time_it=False, **kwargs):
         
     correlation_strength = np.random.uniform(hyperparameters['correlation_strength_min'], hyperparameters['correlation_strength_max'])
@@ -41,7 +41,7 @@ def get_batch(batch_size, seq_len, num_features, hyperparameters, device=default
     p_feature_removed_min = hyperparameters["random_feature_removal_min"]
 
 
-    def get_seq(data=None):
+    def get_seq(data=None, num_features=None):
         start = time.time()
         if data is None:
             if sampling == 'normal':
@@ -180,19 +180,33 @@ def get_batch(batch_size, seq_len, num_features, hyperparameters, device=default
     #     get_model = lambda: model
     # Call the function once to compile it
     start = time.time()
-    data = torch.normal(mean=torch.zeros((seq_len, batch_size, num_features)), 
-                        std=torch.ones((seq_len, batch_size, num_features)))
+    # data = torch.normal(mean=torch.zeros((seq_len, batch_size, num_features)), 
+    #                     std=torch.ones((seq_len, batch_size, num_features)))
     # if hyperparameters["positive_only"]:
     #     data = torch.abs(data)
     # if hyperparameters["proba_zero"] > 0:
     #     data = torch.where(torch.rand_like(data) < hyperparameters["proba_zero"], torch.zeros_like(data), data)
+    #data = np.random.normal(0, 1, (seq_len, batch_size, num_features))
+    sample = []
+    #sample = [get_seq(data[:, i, :]) for i in range(0, batch_size)]
+    for  i in range(0, batch_size):
+        num_features = num_features_sampler()
+        data = torch.normal(mean=torch.zeros((seq_len, num_features)),
+                            std=torch.ones((seq_len, num_features)))
+        sample.append(get_seq(data, num_features))
+        
+    
+    
     if time_it:
         print(f"Sampling for the batch took {time.time() - start} seconds")
-    #data = np.random.normal(0, 1, (seq_len, batch_size, num_features))
-    sample = [get_seq(data[:, i, :]) for i in range(0, batch_size)]
 
     x, y = zip(*sample)
     y = torch.cat(y, 1).detach().squeeze(2)
+    #x = torch.cat(x, 1).detach()
+    # concat x and pad with zeros
+    # first pad with zeros to num_features_max
+    x = [torch.cat([x[i], torch.zeros((seq_len, 1, num_features_max - x[i].shape[-1]))], -1) for i in range(len(x))]
+    # then concat
     x = torch.cat(x, 1).detach()
     
     
