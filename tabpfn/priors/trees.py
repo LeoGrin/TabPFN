@@ -7,6 +7,7 @@ import numpy as np
 
 from tabpfn.utils import default_device
 from .utils import get_batch_to_dataloader
+from .flexible_categorical import class_sampler_f
 
 
 import random
@@ -235,6 +236,7 @@ def get_batch(batch_size, seq_len, num_features_max, num_features_sampler, hyper
     correlation_proba = np.random.uniform(hyperparameters['correlation_proba_min'], hyperparameters['correlation_proba_max'])
     def get_seq():
         num_features = num_features_sampler()
+        num_classes = class_sampler_f(2, hyperparameters["num_classes"])() #TODO clean this
         if sampling == 'normal':
             # generate a random covariance matrix
             cov = np.eye(num_features)
@@ -319,8 +321,7 @@ def get_batch(batch_size, seq_len, num_features_max, num_features_sampler, hyper
         # Sample number of trees from an exponential distribution with parameter lambda
         n_estimators = (1 + int(np.random.exponential(1. / hyperparameters['n_estimators_lambda']))) if (hyperparameters['n_estimators'] is None) else hyperparameters['n_estimators']
         time_forest = time.time()
-        forest = ExtraTreesClassifier(max_depth=max_depth, n_estimators=n_estimators, max_features=1, n_jobs=1) # max_features=1 means that the splits are totally random
-        num_classes = hyperparameters['num_classes']        
+        forest = ExtraTreesClassifier(max_depth=max_depth, n_estimators=n_estimators, max_features=1, n_jobs=1) # max_features=1 means that the splits are totally random 
 
         fake_y = np.random.randint(0, num_classes, data.shape[0])
         # label encoder to prevent holes in the class labels (e.g. 0, 1, 3)
