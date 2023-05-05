@@ -379,8 +379,11 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
             
             if epoch % save_every == 0 and epoch > 0 and rank == 0:
                 # Save model
-                torch.save(model.state_dict(), f"./model_checkpoints/model_{name}_{epoch}.pt")
-                print(f"Saved model_{epoch}.pt")
+                torch.save({"model_state_dict": model.state_dict(),
+                            "optimizer_state_dict": optimizer.state_dict(),
+                            "scheduler_state_dict": scheduler.state_dict(),
+                            "epoch": epoch}, f"./model_checkpoints/model_{name}_{epoch}.pt")
+                print(f"./model_checkpoints/model_{name}_{epoch}.pt")
 
             if verbose:
                 print('-' * 89)
