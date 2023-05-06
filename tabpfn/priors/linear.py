@@ -20,8 +20,7 @@ from sklearn.preprocessing import OneHotEncoder, LabelEncoder
 from sklearn.compose import ColumnTransformer
 
 def get_batch(batch_size, seq_len, num_features_max, num_features_sampler, hyperparameters, device=default_device, num_outputs=1, sampling='normal'
-              , epoch=None, time_it=False, **kwargs):
-        
+              , epoch=None, time_it=False, verbose=False, **kwargs):
     correlation_strength = np.random.uniform(hyperparameters['correlation_strength_min'], hyperparameters['correlation_strength_max'])
     correlation_proba = np.random.uniform(hyperparameters['correlation_proba_min'], hyperparameters['correlation_proba_max'])
     time_it = False
@@ -39,6 +38,9 @@ def get_batch(batch_size, seq_len, num_features_max, num_features_sampler, hyper
     #     p_feature_removed_min = hyperparameters["random_feature_removal_min"]
     p_feature_removed_max = hyperparameters["random_feature_removal"]
     p_feature_removed_min = hyperparameters["random_feature_removal_min"]
+    if verbose:
+        print("p_feature_removed_max", p_feature_removed_max)
+        print("p_feature_removed_min", p_feature_removed_min)
 
 
     def get_seq(data=None, num_features=None):
@@ -91,6 +93,8 @@ def get_batch(batch_size, seq_len, num_features_max, num_features_sampler, hyper
         n_categorical_features = np.random.binomial(data.shape[1], hyperparameters['p_categorical'])
         categorical_features = np.random.choice(data.shape[1], n_categorical_features, replace=False)
         # Convert numerical to categorical
+        if verbose:
+            print("categorical_features", len(categorical_features))
         for i in categorical_features:
             n_categories = np.random.randint(hyperparameters['min_categories'], hyperparameters['max_categories'])
             #TODO check if this is the right distribution
@@ -106,15 +110,20 @@ def get_batch(batch_size, seq_len, num_features_max, num_features_sampler, hyper
         X = data.reshape(-1, num_features)
         # sample the number of features to remove
         if not hyperparameters ["n_relevant_features_min"] is None:
+            if verbose:
+                print("n_relevant_features_min", hyperparameters ["n_relevant_features_min"])
+                print("n_relevant_features_max", hyperparameters ["n_relevant_features_max"])
             number_of_features_to_remove = max(0, X.shape[1] - int(np.random.uniform(hyperparameters["n_relevant_features_min"], hyperparameters["n_relevant_features_max"])))
             number_of_features_to_remove = max(number_of_features_to_remove, int(X.shape[1] * p_feature_removed_min))
         else:
             number_of_features_to_remove = int(np.random.uniform(p_feature_removed_min * X.shape[1], p_feature_removed_max * X.shape[1]))
         number_of_features_to_remove = min(number_of_features_to_remove, X.shape[1] -3) # make sure we have at least 3 features
-        if np.random.random() < 0.01:
+        if np.random.random() < 0.01 or verbose:
             print("num features", X.shape[1], 'number_of_features_to_remove', number_of_features_to_remove)
         features_to_remove = np.random.choice(X.shape[1], number_of_features_to_remove, replace=False)
         X = np.delete(X, features_to_remove, axis=1)
+        if verbose:
+            print("features removed", len(features_to_remove))
         # fix the categorical features
         categorical_features = [i for i in categorical_features if i not in features_to_remove]
         #TODO seems correct, but check
@@ -131,7 +140,7 @@ def get_batch(batch_size, seq_len, num_features_max, num_features_sampler, hyper
         # if time_it:
         #     print(f"One-hot encoding took {time.time() - start} seconds")
         
-        if np.random.random() < 0.001:
+        if np.random.random() < 0.001 or verbose:
             print("------------------")
             print("X")
             print(X.shape)

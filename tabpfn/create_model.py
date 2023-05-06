@@ -60,7 +60,7 @@ def create_dataloader(priordataloader_class, criterion, encoder_generator, emsiz
         else:
             return single_eval_pos, bptt
     get_batch_args = {"num_steps":steps_per_epoch, "batch_size":batch_size, "eval_pos_seq_len_sampler":eval_pos_seq_len_sampler, "seq_len_maximum":bptt+(bptt_extra_samples if bptt_extra_samples else 0), "device":device, **extra_prior_kwargs_dict}
-    dataloader_args = {"num_workers":10, "pin_memory":True, "persistent_workers":True, "prefetch_factor":3}
+    dataloader_args = {"num_workers":0}#, "pin_memory":True, "persistent_workers":True, "prefetch_factor":3}
     #dataloader_args = {"num_workers":0}#10, "pin_memory":True, "persistent_workers":True# "prefetch_factor":3}
     dl = priordataloader_class(dataloader_args, get_batch_args)
     validation_get_batch_args = {"num_steps":64, "batch_size":4, "eval_pos_seq_len_sampler":eval_pos_seq_len_sampler, "seq_len_maximum":bptt+(bptt_extra_samples if bptt_extra_samples else 0), "device":device, **extra_prior_kwargs_dict}

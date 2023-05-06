@@ -347,6 +347,9 @@ def transformer_predict(model, eval_xs, eval_ys, eval_position,
         inference_mode_call = torch.inference_mode() if inference_mode and no_grad else NOP()
         with inference_mode_call:
             start = time.time()
+            print(model(
+                    (used_style.repeat(eval_xs.shape[1], 1) if used_style is not None else None, eval_xs, eval_ys.float()),
+                    single_eval_pos=eval_position))
             output = model(
                     (used_style.repeat(eval_xs.shape[1], 1) if used_style is not None else None, eval_xs, eval_ys.float()),
                     single_eval_pos=eval_position)[:, :, 0:num_classes]

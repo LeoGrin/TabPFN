@@ -280,11 +280,12 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
             mean_diff_balanced_acc_adjusted = np.nan
             balanced_acc_tabpfn_adjusted = np.nan
             mean_relative_diff_balanced_acc = np.nan
+            balanced_acc_lasso_adjusted = np.nan
             
         
         return total_loss / steps_per_epoch, (total_positional_losses / total_positional_losses_recorded).tolist(),\
             time_to_get_batch, forward_time, step_time, nan_steps.cpu().item()/(batch+1),\
-            ignore_steps.cpu().item()/(batch+1), balanced_acc_tabpfn_adjusted, mean_diff_balanced_acc_adjusted, mean_relative_diff_balanced_acc
+            ignore_steps.cpu().item()/(batch+1), balanced_acc_tabpfn_adjusted, mean_diff_balanced_acc_adjusted, mean_relative_diff_balanced_acc, balanced_acc_lasso_adjusted
 
     total_loss = float('inf')
     total_positional_losses = float('inf')
@@ -293,7 +294,7 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
 
             epoch_start_time = time.time()
             total_loss, total_positional_losses, time_to_get_batch, forward_time, step_time, nan_share,\
-            ignore_share, balanced_acc_tabpfn, mean_diff_balanced_acc, mean_relative_diff_balanced_acc =\
+            ignore_share, balanced_acc_tabpfn, mean_diff_balanced_acc, mean_relative_diff_balanced_acc, balanced_acc_lasso =\
                 train_epoch(dl, validation_dl)
             if curriculum:
                 #TODO make this more flexible
@@ -360,6 +361,7 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
                         "epoch": epoch,
                         "train_loss": total_loss,
                         "balanced_acc": balanced_acc_tabpfn,
+                        "balanced_acc_lasso": balanced_acc_lasso,
                         "mean_diff_balanced_acc": mean_diff_balanced_acc,
                         "mean_relative_diff_balanced_acc": mean_relative_diff_balanced_acc,
                         "num_features_no_pad": extra_prior_kwargs_dict["hyperparameters"]['num_features_no_pad'],
