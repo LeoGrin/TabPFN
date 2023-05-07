@@ -174,3 +174,6 @@ tabpfn/wandb/
 *csv
 tabpfn/.neptune/
 .neptune/
+datasets/
+slurm/
+tabpfn/slurm/

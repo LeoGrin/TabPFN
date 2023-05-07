@@ -53,13 +53,13 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
           wandb_offline=False, use_neptune=False, validate_on_datasets=False, name="default", save_every=20, config={}, 
           get_openml_from_pickle=False, curriculum=False, curriculum_tol=0.1, curriculum_step=1, curriculum_start=5, **model_extra_args
           ):
-    
     model, dl, device, n_out, validation_dl = create_model(priordataloader_class, criterion, encoder_generator, emsize, nhid, nlayers, nhead, dropout,
                                                        epochs, steps_per_epoch, batch_size, bptt, lr, weight_decay, warmup_epochs, input_normalization,
                                                        y_encoder_generator, pos_encoder_generator, decoder, extra_prior_kwargs_dict, scheduler_func,
                                                        load_weights_from_this_state_dict, validation_period, single_eval_pos_gen, bptt_extra_samples, gpu_device,
                                                        aggregate_k_gradients, verbose, style_encoder_generator, epoch_callback,
-                                                       initializer, initialize_with_model, train_mixed_precision, efficient_eval_masking, use_wandb, name, save_every, **model_extra_args)
+                                                       initializer, initialize_with_model, train_mixed_precision, efficient_eval_masking, use_wandb, name, save_every, 
+                                                       config["num_workers"], **model_extra_args)
     # using_dist, rank, device = init_dist(device)
     # print("Using distributed training:", using_dist)
     # if using_dist:
@@ -225,6 +225,7 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
             balanced_acc_lasso_adjusted_list = []
             balanced_acc_tabpfn_list = []
             balanced_acc_lasso_list = []
+            data_to_save = []
             for batch, (data, targets, single_eval_pos) in pbar_val:
                 with torch.no_grad():
                     if bptt_extra_samples is None:
@@ -238,9 +239,12 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
                     lasso = LogisticRegression(penalty='l1', max_iter=1000, solver='liblinear')
                     X_cpu = data[1].cpu().numpy()
                     y_cpu = data[2].cpu().numpy()
+
                     for i in range(X_cpu.shape[1]):
                         X = X_cpu[:, i, :]
                         y = y_cpu[:, i]
+                        print("X.shape", X.shape)
+                        print(np.unique(y, return_counts=True))           
                         n_zero_cols = len(np.where(~X.any(axis=0))[0])
                         print("num zero_cols", n_zero_cols)
                         actual_num_features_no_pad = X.shape[1] - n_zero_cols
@@ -249,6 +253,7 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
                             continue
                         X_train, X_test = X[:single_eval_pos], X[single_eval_pos:]
                         y_train, y_test = y[:single_eval_pos], y[single_eval_pos:]
+                        data_to_save.append((X_train, X_test, y_train, y_test))
                         if len(np.unique(y_train)) == 1:
                             print("All samples in the training set belong to the same class, skipping")
                             continue
@@ -258,6 +263,7 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
                         balanced_acc_adjusted = balanced_accuracy_score(y_test, preds, adjusted=True)
                         balanced_acc = balanced_accuracy_score(y_test, preds)
                         preds_tabpfn = output[:, i, :].detach().cpu().numpy().argmax(axis=1)
+                        # try to predict with batch 1
                         balanced_acc_tabpfn_adjusted = balanced_accuracy_score(y_test, preds_tabpfn, adjusted=True)
                         balanced_acc_tabpfn = balanced_accuracy_score(y_test, preds_tabpfn)
                         balanced_acc_tabpfn_adjusted_list.append(balanced_acc_tabpfn_adjusted)
@@ -275,6 +281,9 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
             print("Balanced accuracy tabpfn: ", np.mean(balanced_acc_tabpfn_list))
             print("Balanced accuracy lasso: ", np.mean(balanced_acc_lasso_list))
             print("Mean relative difference balanced accuracy: ", mean_relative_diff_balanced_acc)
+            import pickle
+            with open(f"data_to_save.pkl", "wb") as f:
+                pickle.dump(data_to_save, f)
         except:
             print("Could not compute lasso")
             mean_diff_balanced_acc_adjusted = np.nan

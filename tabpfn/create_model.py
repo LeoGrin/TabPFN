@@ -43,7 +43,8 @@ def create_dataloader(priordataloader_class, criterion, encoder_generator, emsiz
           y_encoder_generator=None, pos_encoder_generator=None, decoder=None, extra_prior_kwargs_dict={}, scheduler=get_cosine_schedule_with_warmup,
           load_weights_from_this_state_dict=None, validation_period=10, single_eval_pos_gen=None, bptt_extra_samples=None, gpu_device='cuda:0',
           aggregate_k_gradients=1, verbose=True, style_encoder_generator=None, epoch_callback=None,
-          initializer=None, initialize_with_model=None, train_mixed_precision=False, efficient_eval_masking=True, use_wandb=False, name="default", save_every=20, **model_extra_args
+          initializer=None, initialize_with_model=None, train_mixed_precision=False, efficient_eval_masking=True, use_wandb=False, name="default", save_every=20,
+          num_workers=10, **model_extra_args
           ):
     print(model_extra_args)
     device = gpu_device if torch.cuda.is_available() else 'cpu:0'
@@ -60,7 +61,8 @@ def create_dataloader(priordataloader_class, criterion, encoder_generator, emsiz
         else:
             return single_eval_pos, bptt
     get_batch_args = {"num_steps":steps_per_epoch, "batch_size":batch_size, "eval_pos_seq_len_sampler":eval_pos_seq_len_sampler, "seq_len_maximum":bptt+(bptt_extra_samples if bptt_extra_samples else 0), "device":device, **extra_prior_kwargs_dict}
-    dataloader_args = {"num_workers":0}#, "pin_memory":True, "persistent_workers":True, "prefetch_factor":3}
+    print("Num workers: ", num_workers)
+    dataloader_args = {"num_workers":num_workers, "pin_memory":True, "persistent_workers":True, "prefetch_factor":3}
     #dataloader_args = {"num_workers":0}#10, "pin_memory":True, "persistent_workers":True# "prefetch_factor":3}
     dl = priordataloader_class(dataloader_args, get_batch_args)
     validation_get_batch_args = {"num_steps":64, "batch_size":4, "eval_pos_seq_len_sampler":eval_pos_seq_len_sampler, "seq_len_maximum":bptt+(bptt_extra_samples if bptt_extra_samples else 0), "device":device, **extra_prior_kwargs_dict}
@@ -73,15 +75,17 @@ def create_model(priordataloader_class, criterion, encoder_generator, emsize=200
           y_encoder_generator=None, pos_encoder_generator=None, decoder=None, extra_prior_kwargs_dict={}, scheduler=get_cosine_schedule_with_warmup,
           load_weights_from_this_state_dict=None, validation_period=10, single_eval_pos_gen=None, bptt_extra_samples=None, gpu_device='cuda:0',
           aggregate_k_gradients=1, verbose=True, style_encoder_generator=None, epoch_callback=None,
-          initializer=None, initialize_with_model=None, train_mixed_precision=False, efficient_eval_masking=True, use_wandb=False, name="default", save_every=20, **model_extra_args
+          initializer=None, initialize_with_model=None, train_mixed_precision=False, efficient_eval_masking=True, use_wandb=False, name="default", save_every=20, 
+          num_workers=10, **model_extra_args
           ):
-
+    print("Num workers: ", num_workers)
     dl, validation_dl, device = create_dataloader(priordataloader_class, criterion, encoder_generator, emsize=emsize, nhid=nhid, nlayers=nlayers, nhead=nhead, dropout=dropout,
           epochs=epochs, steps_per_epoch=steps_per_epoch, batch_size=batch_size, bptt=bptt, lr=lr, weight_decay=weight_decay, warmup_epochs=warmup_epochs, input_normalization=input_normalization,
           y_encoder_generator=y_encoder_generator, pos_encoder_generator=pos_encoder_generator, decoder=decoder, extra_prior_kwargs_dict=extra_prior_kwargs_dict, scheduler=scheduler,
           load_weights_from_this_state_dict=load_weights_from_this_state_dict, validation_period=validation_period, single_eval_pos_gen=single_eval_pos_gen, bptt_extra_samples=bptt_extra_samples, gpu_device=gpu_device,
           aggregate_k_gradients=aggregate_k_gradients, verbose=verbose, style_encoder_generator=style_encoder_generator, epoch_callback=epoch_callback,
-          initializer=initializer, initialize_with_model=initialize_with_model, train_mixed_precision=train_mixed_precision, efficient_eval_masking=efficient_eval_masking, use_wandb=use_wandb, name=name, save_every=save_every, **model_extra_args
+          initializer=initializer, initialize_with_model=initialize_with_model, train_mixed_precision=train_mixed_precision, efficient_eval_masking=efficient_eval_masking, use_wandb=use_wandb, name=name, save_every=save_every, 
+          num_workers=num_workers, **model_extra_args
           )
     
 
@@ -393,13 +397,14 @@ def load_model_no_train(path, filename, device, config_sample=None, verbose=0):
     config_sample['num_features_used_in_training'] = config_sample['num_features_used']
     config_sample['num_features_used'] = lambda: config_sample['num_features']
     config_sample['num_classes_in_training'] = config_sample['num_classes']
-    config_sample['num_classes'] = 2
+    config_sample['num_classes'] = config_sample['num_classes']
     config_sample['batch_size_in_training'] = config_sample['batch_size']
     config_sample['batch_size'] = 1
     config_sample['bptt_in_training'] = config_sample['bptt']
     config_sample['bptt'] = 10
     config_sample['bptt_extra_samples_in_training'] = config_sample['bptt_extra_samples']
     config_sample['bptt_extra_samples'] = None
+    print('Config sample', config_sample)
 
     #print('Memory', str(get_gpu_memory()))
 

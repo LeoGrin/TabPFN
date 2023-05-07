@@ -27,7 +27,7 @@ from notebook_utils import *
 import argparse
 import wandb 
 from priors.utils import uniform_int_sampler_f
-
+import submitit
 
 
 parser = argparse.ArgumentParser(description='Train')
@@ -42,7 +42,6 @@ parser.add_argument('--max_depth_lambda', type=float, default=None)
 parser.add_argument('--checkpoint_file', type=str, default=None)
 
 parser.add_argument('--num_features', type=int, default=100)
-parser.add_argument('--num_classes', type=int, default=10)
 
 # p_categorical
 parser.add_argument('--p_categorical', type=float, default=0.)
@@ -71,16 +70,15 @@ parser.add_argument('--curriculum_start', type=int, default=5)
 parser.add_argument('--criterion_curriculum', type=str, default='relative')
 parser.add_argument('--scheduler', type=str, default="cosine")
 parser.add_argument("--reset_optim_on_curriculum_step", action='store_true')
-# used to evaluate the model only on batches where the number of features is big enough
+
 parser.add_argument("--eval_prop_num_features", type=float, default=0.5)
 parser.add_argument("--sample_bigger_features", action='store_true')
 
 parser.add_argument("--test", action='store_true')
 
-parser.add_argument('--num_workers', default=10, type=int)
-
 
 parser.add_argument('--emsize', default=512, type=int) # sometimes even larger is better e.g. 1024
+
 
 # whether to return directly the classes instead of the probabilities
 parser.add_argument('--return_classes', action='store_true')
@@ -104,6 +102,9 @@ parser.add_argument("--num_steps", type=int, default=128)
 parser.add_argument("--epochs", type=int, default=400)
 # local rank
 parser.add_argument("--local_rank", type=int, default=None)
+# num_workers
+parser.add_argument("--num_workers", type=int, default=10)
+parser.add_argument("--partition", type=str, default="gpu")
 
 args = parser.parse_args()
 
@@ -111,6 +112,7 @@ if args.test:
   args.wandb = False
   args.neptune = False
   args.num_steps = 8
+
 
 if args.name == 'default':
     if args.prior is None:
@@ -387,6 +389,7 @@ config = {'lr': 0.0001,
 config = {**config, **args.__dict__}
 for param_name, param_value in args.__dict__.items():
         print(f"Using {param_name}={param_value}")
+  
         
 if args.scheduler == "cosine":
   from tabpfn.utils import get_cosine_schedule_with_warmup
@@ -396,20 +399,20 @@ elif args.scheduler == "none":
   scheduler = get_no_op_scheduler
 else:
   raise ValueError(f"Unknown scheduler {args.scheduler}")
-
-config["nhead"] = config["emsize"] / 64
-assert config["nhead"] == int(config["nhead"]), "emsize must be a multiple of 64"
-config["nhead"] = int(config["nhead"])
-print(f"Using nhead={config['nhead']}")
         
 
 config["num_features_no_pad"] = config["num_features"] if not args.curriculum else args.curriculum_start
 # a bit confusing but max_num_features is the number of features actually used, while num_feature is the total number including padding
 #TODO clean that up because max_num_features is also used elsewhere
 config["seq_len_used"] = 50 # I think this has no effect
+config["num_classes"] = 10#uniform_int_sampler_f(2, config['max_num_classes']) #TODO: make it work with return_classes
 config["num_features_used"] = {'num_features_func': uniform_int_sampler_f(3, config["num_features_no_pad"])} #TODO get rid of differentiable
 
 
+config["nhead"] = config["emsize"] / 64
+assert config["nhead"] == int(config["nhead"]), "emsize must be a multiple of 64"
+config["nhead"] = int(config["nhead"])
+print(f"Using nhead={config['nhead']}")
 
 
 config["remove_outliers_in_flexible_categorical"] = True
@@ -439,7 +442,6 @@ if args.prior is not None:
     print(f"Using {args.prior} prior with n_estimators_lambda={args.n_estimators_lambda}, n_estimators={args.n_estimators}, max_depth_lambda={args.max_depth_lambda}")
 
 
-
     
 #config['aggregate_k_gradients'] = 8
 #config['batch_size'] = 16*config['aggregate_k_gradients']
@@ -458,6 +460,7 @@ config["validate_on_datasets"] =  args.validate_on_datasets
 
 config_sample = evaluate_hypers(config)
 
+# Load state dict
 if args.checkpoint_file:
     path = f"model_checkpoints/{args.checkpoint_file}.pt"
     print(f'Loading checkpoint file {args.checkpoint_file}')
@@ -473,32 +476,22 @@ if args.checkpoint_file:
         epoch = loaded_data["epoch"]
     else:
         model_state = loaded_data
-      
-# save config
-# import pickle
-# def remove_lambdas(obj):
-#     if isinstance(obj, dict):
-#         new_obj = {}
-#         for key, value in obj.items():
-#             if not (isinstance(value, type(lambda: 0)) and value.__name__ == "<lambda>"):
-#                 new_obj[key] = remove_lambdas(value)
-#         return new_obj
-#     elif isinstance(obj, (list, tuple)):
-#         new_obj = []
-#         for item in obj:
-#             new_item = remove_lambdas(item)
-#             if new_item is not None:
-#                 new_obj.append(new_item)
-#         return type(obj)(new_obj)
-#     else:
-#         return obj
-with open(f"config.pkl", "wb") as f:
-    config_to_save = config
-    config_to_save["num_features_used"] = None
-    pickle.dump(config_to_save, f)
 
 ## Training
 # launch wandb run
 #TODO add validation evals
-model = get_model(config_sample, device, should_train=True, verbose=1, state_dict=model_state if args.checkpoint_file else None,
-                  scheduler=scheduler)
+#model = get_model(config_sample, device, should_train=True, verbose=1, state_dict=checkpoint if args.checkpoint_file else None)
+
+
+executor = submitit.AutoExecutor("slurm")
+# partition = "gpu"
+# n_gpus = 1
+#time max 24h
+executor.update_parameters(
+    slurm_partition=args.partition,
+    gpus_per_node=1,
+    timeout_min=60*60,
+)
+
+job = executor.submit(get_model, config_sample, device, should_train=True, verbose=1, state_dict=model_state if args.checkpoint_file else None,
+                      scheduler=scheduler)
