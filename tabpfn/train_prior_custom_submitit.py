@@ -70,11 +70,14 @@ parser.add_argument('--curriculum_start', type=int, default=5)
 parser.add_argument('--criterion_curriculum', type=str, default='relative')
 parser.add_argument('--scheduler', type=str, default="cosine")
 parser.add_argument("--reset_optim_on_curriculum_step", action='store_true')
+parser.add_argument("--num_steps_scheduler", type=int, default=None)
 
 parser.add_argument("--eval_prop_num_features", type=float, default=0.5)
-parser.add_argument("--sample_bigger_features", action='store_true')
+parser.add_argument("--sample_bigger_features", type=float, default=0.0)
 
 parser.add_argument("--test", action='store_true')
+parser.add_argument('--num_classes', type=int, default=10)
+
 
 
 parser.add_argument('--emsize', default=512, type=int) # sometimes even larger is better e.g. 1024
@@ -399,6 +402,9 @@ elif args.scheduler == "none":
   scheduler = get_no_op_scheduler
 else:
   raise ValueError(f"Unknown scheduler {args.scheduler}")
+
+if not args.num_steps_scheduler is None:
+  scheduler = lambda optimizer, num_warmup_steps, num_training_steps, num_cycles=0.5, last_epoch=-1: get_cosine_schedule_with_warmup(optimizer, num_warmup_steps, args.num_steps_scheduler, num_cycles, last_epoch)
         
 
 config["num_features_no_pad"] = config["num_features"] if not args.curriculum else args.curriculum_start
@@ -409,7 +415,8 @@ config["num_classes"] = 10#uniform_int_sampler_f(2, config['max_num_classes']) #
 config["num_features_used"] = {'num_features_func': uniform_int_sampler_f(3, config["num_features_no_pad"])} #TODO get rid of differentiable
 
 
-config["nhead"] = config["emsize"] / 64
+#config["nhead"] = config["emsize"] / 64
+config["nhead"] = 4
 assert config["nhead"] == int(config["nhead"]), "emsize must be a multiple of 64"
 config["nhead"] = int(config["nhead"])
 print(f"Using nhead={config['nhead']}")
@@ -491,6 +498,7 @@ executor.update_parameters(
     slurm_partition=args.partition,
     gpus_per_node=1,
     timeout_min=60*60,
+    
 )
 
 job = executor.submit(get_model, config_sample, device, should_train=True, verbose=1, state_dict=model_state if args.checkpoint_file else None,

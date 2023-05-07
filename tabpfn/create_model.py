@@ -100,6 +100,7 @@ def create_model(priordataloader_class, criterion, encoder_generator, emsize=200
         n_out = criterion.weight.shape[0]
     else:
         n_out = 1
+    print(f'Number of output units: {n_out}')
 
     model = TransformerModel(encoder, n_out, emsize, nhead, nhid, nlayers, dropout, style_encoder=style_encoder,
                              y_encoder=y_encoder_generator(1, emsize), input_normalization=input_normalization,
@@ -187,6 +188,9 @@ def get_trees_prior_hyperparameters(config):
 def get_mlp_trees_prior_hyperparameters(config):
     return {hp: (list(config[hp].values())[0]) if type(config[hp]) is dict else config[hp] for hp in config}
 
+def get_linear_prior_hyperparameters(config):
+    return {hp: (list(config[hp].values())[0]) if type(config[hp]) is dict else config[hp] for hp in config}
+
 
 def get_meta_gp_prior_hyperparameters(config):
     config = {hp: (list(config[hp].values())[0]) if type(config[hp]) is dict else config[hp] for hp in config}
@@ -268,11 +272,13 @@ def get_model_no_train(config, device, should_train=True, verbose=False, state_d
             model_proto = priors.fast_gp_mix
         elif config['prior_type'] == 'trees':
             prior_hyperparameters = get_trees_prior_hyperparameters(config)
-            print(prior_hyperparameters)
             model_proto = priors.trees
         elif config['prior_type'] == 'mlp_trees':
             prior_hyperparameters = get_mlp_trees_prior_hyperparameters(config)
             model_proto = priors.mlp_trees
+        elif config['prior_type'] == 'linear':
+            prior_hyperparameters = get_linear_prior_hyperparameters(config)
+            model_proto = priors.linear
         else:
             raise Exception()
 
@@ -327,6 +333,7 @@ def get_model_no_train(config, device, should_train=True, verbose=False, state_d
 
     epochs = 0 if not should_train else config['epochs']
     #print('MODEL BUILDER', model_proto, extra_kwargs['get_batch'])
+    print("nhead", config['nhead'])
     model = create_model(model_proto.DataLoader
                 , loss
                 , encoder
@@ -393,6 +400,17 @@ def load_model_no_train(path, filename, device, config_sample=None, verbose=0):
         config_sample['differentiable_hyperparameters']['prior_mlp_activations']['choice_values'] = [
             torch.nn.Tanh for k in config_sample['differentiable_hyperparameters']['prior_mlp_activations']['choice_values']]
 
+    # deduce the model parameters from the model state dict
+    module_prefix = 'module.'
+    model_state = {k.replace(module_prefix, ''): v for k, v in model_state.items()}
+    config_sample["emsize"] = model_state['encoder.weight'].shape[0]
+    config_sample["nlayers"] = len([k for k in model_state.keys() if k.startswith('transformer_encoder.layers') and k.endswith('self_attn.out_proj.weight')])
+    config_sample["nhid_factor"] = model_state['transformer_encoder.layers.0.linear1.weight'].shape[0] // config_sample["emsize"]
+    hidden_size = config_sample["emsize"] * config_sample["nhid_factor"]
+    config_sample["nhead"] = config_sample["nhead"] # not sure if it can be deduced from the state dict
+    print(f"WARNING: Using nhead={config_sample['nhead']} from config, not from the model state dict. This can fail silently.")
+    config_sample["num_features"] =  model_state['encoder.weight'].shape[1]
+    print(f"Loaded model with parameters: emsize={config_sample['emsize']}, nhead={config_sample['nhead']}, nlayers={config_sample['nlayers']}, nhid_factor={config_sample['nhid_factor']}, num_features={config_sample['num_features']}")
     config_sample['categorical_features_sampler'] = lambda: lambda x: ([], [], [])
     config_sample['num_features_used_in_training'] = config_sample['num_features_used']
     config_sample['num_features_used'] = lambda: config_sample['num_features']
@@ -404,13 +422,10 @@ def load_model_no_train(path, filename, device, config_sample=None, verbose=0):
     config_sample['bptt'] = 10
     config_sample['bptt_extra_samples_in_training'] = config_sample['bptt_extra_samples']
     config_sample['bptt_extra_samples'] = None
-    print('Config sample', config_sample)
 
     #print('Memory', str(get_gpu_memory()))
 
     model = get_model_no_train(config_sample, device=device, should_train=False, verbose=verbose)
-    module_prefix = 'module.'
-    model_state = {k.replace(module_prefix, ''): v for k, v in model_state.items()}
     model[2].load_state_dict(model_state)
     model[2].to(device)
     model[2].eval()

@@ -105,7 +105,8 @@ class TabPFNClassifier(BaseEstimator, ClassifierMixin):
 
     def __init__(self, device='cpu', base_path=pathlib.Path(__file__).parent.parent.resolve(), model_string='',
                  N_ensemble_configurations=3, no_preprocess_mode=False, multiclass_decoder='permutation',
-                 feature_shift_decoder=True, only_inference=True, seed=0, no_grad=True, batch_size_inference=32):
+                 feature_shift_decoder=True, only_inference=True, seed=0, no_grad=True, batch_size_inference=32,
+                 normalize_by_used_features=True, remove_outliers_bool=True, normalize_x=True):
         """
         Initializes the classifier and loads the model. 
         Depending on the arguments, the model is either loaded from memory, from a file, or downloaded from the 
@@ -161,6 +162,9 @@ class TabPFNClassifier(BaseEstimator, ClassifierMixin):
         self.base_path = base_path
         self.i = i
         self.model_string = model_string
+        self.normalize_by_used_features = normalize_by_used_features
+        self.remove_outliers_bool = remove_outliers_bool
+        self.normalize_x = normalize_x
 
         self.max_num_features = self.c['num_features']
         self.max_num_classes = self.c['max_num_classes']
@@ -275,6 +279,9 @@ class TabPFNClassifier(BaseEstimator, ClassifierMixin):
                                          return_logits=return_logits,
                                          no_grad=self.no_grad,
                                          batch_size_inference=self.batch_size_inference,
+                                         normalize_by_used_features=self.normalize_by_used_features,
+                                         normalize_x=self.normalize_x,
+                                         remove_outliers_bool=self.remove_outliers_bool,
                                          **get_params_from_config(self.c))
         prediction_, y_ = prediction.squeeze(0), y_full.squeeze(1).long()[eval_pos:]
 
@@ -312,6 +319,9 @@ def transformer_predict(model, eval_xs, eval_ys, eval_position,
                         seed=0,
                         no_grad=True,
                         return_logits=False,
+                        remove_outliers_bool=True,
+                        normalize_by_used_features=True,
+                        normalize_x=True,
                         **kwargs):
     """
 
@@ -379,7 +389,8 @@ def transformer_predict(model, eval_xs, eval_ys, eval_position,
                 pt = RobustScaler(unit_variance=True)
 
         # eval_xs, eval_ys = normalize_data(eval_xs), normalize_data(eval_ys)
-        eval_xs = normalize_data(eval_xs, normalize_positions=-1 if normalize_with_test else eval_position)
+        if normalize_x: #TODO use config
+            eval_xs = normalize_data(eval_xs, normalize_positions=-1 if normalize_with_test else eval_position)
 
         # Removing empty features
         eval_xs = eval_xs[:, 0, :]
@@ -405,10 +416,13 @@ def transformer_predict(model, eval_xs, eval_ys, eval_position,
         eval_xs = eval_xs.unsqueeze(1)
 
         # TODO: Caution there is information leakage when to_ranking is used, we should not use it
-        eval_xs = remove_outliers(eval_xs, normalize_positions=-1 if normalize_with_test else eval_position) \
-                if not normalize_to_ranking else normalize_data(to_ranking_low_mem(eval_xs))
+        if remove_outliers_bool:
+            eval_xs = remove_outliers(eval_xs, normalize_positions=-1 if normalize_with_test else eval_position) \
+                    if not normalize_to_ranking else normalize_data(to_ranking_low_mem(eval_xs))
         # Rescale X
-        eval_xs = normalize_by_used_features_f(eval_xs, eval_xs.shape[-1], max_features,
+        #TODO rescale_features is not used
+        if normalize_by_used_features:
+            eval_xs = normalize_by_used_features_f(eval_xs, eval_xs.shape[-1], max_features,
                                                normalize_with_sqrt=normalize_with_sqrt)
 
         return eval_xs.to(device)

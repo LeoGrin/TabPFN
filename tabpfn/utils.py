@@ -335,3 +335,14 @@ def normalize_by_used_features_f(x, num_features_used, num_features, normalize_w
     if normalize_with_sqrt:
         return x / (num_features_used / num_features)**(1 / 2)
     return x / (num_features_used / num_features)
+
+def normalize_by_used_features_f2(x, num_features, normalize_with_sqrt=False):
+    #takes a padded tensor as input
+    assert normalize_with_sqrt == False, "Not implemented"
+    # find all-0 features
+    # shape of x is (seq_len, batch_size, num_features)
+    zeroes = torch.isclose(x, torch.zeros_like(x)).all(dim=0)
+    num_features_used = x.shape[2] - zeroes.sum(dim=1)
+    for i in range(x.shape[1]):
+        x[:, i, :] = x[:, i, :] / (num_features_used[i] / num_features)
+    return x

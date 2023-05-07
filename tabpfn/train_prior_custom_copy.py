@@ -397,7 +397,8 @@ elif args.scheduler == "none":
 else:
   raise ValueError(f"Unknown scheduler {args.scheduler}")
 
-config["nhead"] = config["emsize"] / 64
+#config["nhead"] = config["emsize"] / 64
+config["nhead"] = 4
 assert config["nhead"] == int(config["nhead"]), "emsize must be a multiple of 64"
 config["nhead"] = int(config["nhead"])
 print(f"Using nhead={config['nhead']}")

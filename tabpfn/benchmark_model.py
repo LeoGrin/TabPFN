@@ -267,20 +267,27 @@ if __name__ == """__main__""":
     device = "cuda:0"
     #checkpoint = "trees55166_49voozm8_220"
     #checkpoint = "trees69859_eouc70o7_390"
-    checkpoint = "trees676_obqe7mfl_350"
+    #checkpoint = "trees676_obqe7mfl_350"
+    #checkpoint = "trees83490_bbldubv2_350"
+    #checkpoint = "trees57114_9gx20nsw_370"
+    #checkpoint = "trees10182_38zv803x_320"
+    #checkpoint = "trees13060_u0ncvfl9_400"
     #checkpoint = "trees7329_6qspdk92_400"
     #checkpoint = "trees4315_080m7u0l_390"
     #checkpoint = "trees97149_stz4qj1z_180"
-    model = TabPFNClassifier(device=device, no_preprocess_mode=True)
+    model = TabPFNClassifier(device=device)#, no_preprocess_mode=True)
+                             #normalize_by_used_features=False, normalize_x=True, remove_outliers_bool=True)
     #model = TabPFNClassifier(device=device)
     #model = GradientBoostingClassifier()
     #model = GradientBoostingClassifier()
     #model = MLPClassifier()
-    model_pytorch = load_model_no_train("model_checkpoints", f"model_{checkpoint}.pt", 0, model.c, 0)[0]
-    model.model = model_pytorch
-    model_name = checkpoint
+    #model.c["num_classes"] = 10
+    #model.c["nhead"] = 8
+    #model_pytorch = load_model_no_train("model_checkpoints", f"model_{checkpoint}.pt", 0, model.c, 0)[0]
+    #model.model = model_pytorch
+    model_name = "tabpfn"
     res = get_benchmark_performance(model, model_name=model_name, one_hot_encoding=False, 
-                                    random_rotation=False,)
+                                    random_rotation=False)
     #model_name = f"tabpfn_{checkpoint}"
     #model_name = "mlp_sklearn"
     #model_name = model_name
@@ -290,7 +297,7 @@ if __name__ == """__main__""":
     res["model"] = model_name
     results = pd.read_csv("results_benchmark.csv")
     # remove old results
-    #results = results[results["model"] != model_name]
+    results = results[results["model"] != model_name]
     # add new results
     results = pd.concat([results, res])
     results.to_csv(f"results_benchmark.csv")

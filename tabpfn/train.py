@@ -281,9 +281,6 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
             print("Balanced accuracy tabpfn: ", np.mean(balanced_acc_tabpfn_list))
             print("Balanced accuracy lasso: ", np.mean(balanced_acc_lasso_list))
             print("Mean relative difference balanced accuracy: ", mean_relative_diff_balanced_acc)
-            import pickle
-            with open(f"data_to_save.pkl", "wb") as f:
-                pickle.dump(data_to_save, f)
         except:
             print("Could not compute lasso")
             mean_diff_balanced_acc_adjusted = np.nan
@@ -400,6 +397,7 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
             
             if epoch % save_every == 0 and epoch > 0 and rank == 0:
                 # Save model
+                #TODO save config
                 torch.save({"model_state_dict": model.state_dict(),
                             "optimizer_state_dict": optimizer.state_dict(),
                             "scheduler_state_dict": scheduler.state_dict(),

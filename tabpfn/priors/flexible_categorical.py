@@ -5,7 +5,7 @@ import torch
 from torch import nn
 
 from .utils import get_batch_to_dataloader
-from tabpfn.utils import normalize_data, nan_handling_missing_for_unknown_reason_value, nan_handling_missing_for_no_reason_value, nan_handling_missing_for_a_reason_value, to_ranking_low_mem, remove_outliers, normalize_by_used_features_f
+from tabpfn.utils import normalize_data, nan_handling_missing_for_unknown_reason_value, nan_handling_missing_for_no_reason_value, nan_handling_missing_for_a_reason_value, to_ranking_low_mem, remove_outliers, normalize_by_used_features_f, normalize_by_used_features_f2
 from .utils import randomize_classes, CategoricalActivation
 from .utils import uniform_int_sampler_f
 
@@ -105,8 +105,8 @@ class FlexibleCategorical(torch.nn.Module):
         #print("Num features used", self.h['num_features_used'])
         #print("Features no pad", self.h['num_features_no_pad'])
         #self.args_passed.update({'num_features': self.h['num_features_used']})
-        if hyperparameters["sample_bigger_features"]:
-            if torch.rand(1) > 0.5:
+        if hyperparameters["sample_bigger_features"] > 0:
+            if torch.rand(1) > hyperparameters["sample_bigger_features"]:
                 features_sampler = uniform_int_sampler_f(3, self.h['num_features_no_pad'])
             else:
                 features_sampler = uniform_int_sampler_f(self.h['num_features_no_pad'] // 2, self.h['num_features_no_pad'])
@@ -213,7 +213,9 @@ class FlexibleCategorical(torch.nn.Module):
             print('Flex Forward Block 4', round(time.time() - start, 3))
             start = time.time()
         if self.h['normalize_by_used_features']:
-            x = normalize_by_used_features_f(x, x.shape[2], self.args['num_features'], normalize_with_sqrt=self.h.get('normalize_with_sqrt',False))
+            assert x.shape[2] == self.h['num_features_no_pad'] # padding should have been done before now
+            #x = normalize_by_used_features_f(x, x.shape[2], self.args['num_features'], normalize_with_sqrt=self.h.get('normalize_with_sqrt',False))
+            x = normalize_by_used_features_f2(x, self.h['num_features_no_pad'], normalize_with_sqrt=False)
         if time_it:
             print('Flex Forward Block 5', round(time.time() - start, 3))
 
