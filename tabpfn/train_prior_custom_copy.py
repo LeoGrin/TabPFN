@@ -365,7 +365,7 @@ for param in params:
         print(f"Using {param}={getattr(args, param)}")
 
 config["seq_len_used"] = 50
-config["num_classes"] = uniform_int_sampler_f(2, config['max_num_classes'])
+config["num_classes"] = 10#uniform_int_sampler_f(2, config['max_num_classes'])
 config["num_features_used"] = {'num_features_func': uniform_int_sampler_f(3, config['num_features'])}
 
 
@@ -417,10 +417,20 @@ config_sample = evaluate_hypers(config)
 if args.checkpoint_file:
     path = f"model_checkpoints/{args.checkpoint_file}.pt"
     print(f'Loading checkpoint file {args.checkpoint_file}')
-    checkpoint = torch.load(path, map_location=device)
-
+    loaded_data = torch.load(path, map_location="cpu")
+    print("Length of loaded data", len(loaded_data))
+    if len(loaded_data) == 3:
+        model_state, optimizer_state, config_sample = loaded_data
+    elif len(loaded_data) == 4:
+        print('WARNING: Loading model with scheduler state dict')
+        model_state = loaded_data["model_state_dict"]
+        optimizer_state = loaded_data["optimizer_state_dict"]
+        scheduler_state = loaded_data["scheduler_state_dict"]
+        epoch = loaded_data["epoch"]
+    else:
+        model_state = loaded_data
 
 ## Training
 # launch wandb run
 #TODO add validation evals
-model = get_model(config_sample, device, should_train=True, verbose=1, state_dict=checkpoint if args.checkpoint_file else None)
+model = get_model(config_sample, device, should_train=True, verbose=1, state_dict=model_state if args.checkpoint_file else None)
