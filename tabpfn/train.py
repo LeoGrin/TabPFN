@@ -32,6 +32,16 @@ from sklearn.metrics import balanced_accuracy_score
 import numpy as np
 from priors.utils import uniform_int_sampler_f
 
+def remove_callables(config):
+    clean_config = {}
+    for key, value in config.items():
+        if not callable(value):
+            if isinstance(value, dict):
+                clean_config[key] = remove_callables(value)
+            else:
+                clean_config[key] = value
+    return clean_config
+
 
 class Losses():
     gaussian = nn.GaussianNLLLoss(full=True, reduction='none')
@@ -225,17 +235,31 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
             balanced_acc_lasso_adjusted_list = []
             balanced_acc_tabpfn_list = []
             balanced_acc_lasso_list = []
-            data_to_save = []
+            val_loss_list = []
             for batch, (data, targets, single_eval_pos) in pbar_val:
                 with torch.no_grad():
-                    if bptt_extra_samples is None:
-                        single_eval_pos = single_eval_pos_gen() if callable(single_eval_pos_gen) else single_eval_pos_gen
-                    else:
-                        single_eval_pos = targets.shape[0] - bptt_extra_samples
-
+                    
+                    if single_eval_pos is not None:
+                        targets = targets[single_eval_pos:]
                         
                     output = model(tuple(e.to(device, non_blocking=True) if torch.is_tensor(e) else e for e in data) if (isinstance(data, tuple) or isinstance(data, list)) else data.to(device, non_blocking=True)
                                     , single_eval_pos=single_eval_pos)
+                    if isinstance(criterion, nn.GaussianNLLLoss):
+                        assert output.shape[-1] == 2, \
+                            'need to write a little bit of code to handle multiple regression targets at once'
+                        mean_pred = output[..., 0]
+                        var_pred = output[..., 1].abs()
+                        val_losses = criterion(mean_pred.flatten(), targets.to(device, non_blocking=True).flatten(), var=var_pred.flatten())
+                    elif isinstance(criterion, (nn.MSELoss, nn.BCEWithLogitsLoss)):
+                        print("here")
+                        val_losses = criterion(output.flatten(), targets.to(device, non_blocking=True).flatten())
+                    elif isinstance(criterion, nn.CrossEntropyLoss):
+                        val_losses = criterion(output.reshape(-1, n_out), targets.to(device, non_blocking=True).long().flatten())
+                    else:
+                        val_losses = criterion(output, targets)
+                    val_losses = val_losses.view(*output.shape[0:2])
+                    val_loss, nan_share = utils.torch_nanmean(val_losses.mean(0), return_nanshare=True)
+                    val_loss_list.append(val_loss.cpu().detach().item())
                     lasso = LogisticRegression(penalty='l1', max_iter=1000, solver='liblinear')
                     X_cpu = data[1].cpu().numpy()
                     y_cpu = data[2].cpu().numpy()
@@ -253,7 +277,6 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
                             continue
                         X_train, X_test = X[:single_eval_pos], X[single_eval_pos:]
                         y_train, y_test = y[:single_eval_pos], y[single_eval_pos:]
-                        data_to_save.append((X_train, X_test, y_train, y_test))
                         if len(np.unique(y_train)) == 1:
                             print("All samples in the training set belong to the same class, skipping")
                             continue
@@ -274,6 +297,7 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
             balanced_acc_lasso_adjusted = np.mean(balanced_acc_lasso_adjusted_list)
             balanced_acc_tabpfn_adjusted = np.mean(balanced_acc_tabpfn_adjusted_list)
             mean_relative_diff_balanced_acc = np.mean((np.array(balanced_acc_lasso_list) - np.array(balanced_acc_tabpfn_list)) / np.array(balanced_acc_lasso_list))
+            mean_val_loss = np.mean(val_loss_list)
             
             print("Balanced accuracy tabpfn (adjusted): ", balanced_acc_tabpfn_adjusted)
             print("Balanced accuracy lasso (adjusted): ", balanced_acc_lasso_adjusted)
@@ -281,17 +305,19 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
             print("Balanced accuracy tabpfn: ", np.mean(balanced_acc_tabpfn_list))
             print("Balanced accuracy lasso: ", np.mean(balanced_acc_lasso_list))
             print("Mean relative difference balanced accuracy: ", mean_relative_diff_balanced_acc)
+            print("Mean validation loss: ", mean_val_loss)
         except:
             print("Could not compute lasso")
             mean_diff_balanced_acc_adjusted = np.nan
             balanced_acc_tabpfn_adjusted = np.nan
             mean_relative_diff_balanced_acc = np.nan
             balanced_acc_lasso_adjusted = np.nan
+            mean_val_loss = np.nan
             
         
         return total_loss / steps_per_epoch, (total_positional_losses / total_positional_losses_recorded).tolist(),\
             time_to_get_batch, forward_time, step_time, nan_steps.cpu().item()/(batch+1),\
-            ignore_steps.cpu().item()/(batch+1), balanced_acc_tabpfn_adjusted, mean_diff_balanced_acc_adjusted, mean_relative_diff_balanced_acc, balanced_acc_lasso_adjusted
+            ignore_steps.cpu().item()/(batch+1), balanced_acc_tabpfn_adjusted, mean_diff_balanced_acc_adjusted, mean_relative_diff_balanced_acc, balanced_acc_lasso_adjusted, mean_val_loss
 
     total_loss = float('inf')
     total_positional_losses = float('inf')
@@ -300,7 +326,7 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
 
             epoch_start_time = time.time()
             total_loss, total_positional_losses, time_to_get_batch, forward_time, step_time, nan_share,\
-            ignore_share, balanced_acc_tabpfn, mean_diff_balanced_acc, mean_relative_diff_balanced_acc, balanced_acc_lasso =\
+            ignore_share, balanced_acc_tabpfn, mean_diff_balanced_acc, mean_relative_diff_balanced_acc, balanced_acc_lasso, mean_val_loss =\
                 train_epoch(dl, validation_dl)
             if curriculum:
                 #TODO make this more flexible
@@ -371,6 +397,7 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
                         "mean_diff_balanced_acc": mean_diff_balanced_acc,
                         "mean_relative_diff_balanced_acc": mean_relative_diff_balanced_acc,
                         "num_features_no_pad": extra_prior_kwargs_dict["hyperparameters"]['num_features_no_pad'],
+                        "mean_val_loss": mean_val_loss,
                         "val_loss": val_score,
                         "lr": optimizer.param_groups[0]['lr'],
                         "time_to_get_batch": time_to_get_batch,
@@ -401,7 +428,9 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
                 torch.save({"model_state_dict": model.state_dict(),
                             "optimizer_state_dict": optimizer.state_dict(),
                             "scheduler_state_dict": scheduler.state_dict(),
-                            "epoch": epoch}, f"./model_checkpoints/model_{name}_{epoch}.pt")
+                            "epoch": epoch,
+                            "num_features_no_pad": extra_prior_kwargs_dict["hyperparameters"]['num_features_no_pad'],
+                            "config":remove_callables(config)}, f"./model_checkpoints/model_{name}_{epoch}.pt")
                 print(f"./model_checkpoints/model_{name}_{epoch}.pt")
 
             if verbose:

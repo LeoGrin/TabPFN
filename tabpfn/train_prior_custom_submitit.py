@@ -71,9 +71,10 @@ parser.add_argument('--criterion_curriculum', type=str, default='relative')
 parser.add_argument('--scheduler', type=str, default="cosine")
 parser.add_argument("--reset_optim_on_curriculum_step", action='store_true')
 parser.add_argument("--num_steps_scheduler", type=int, default=None)
-
+parser.add_argument("--constant_num_features", action='store_true')
 parser.add_argument("--eval_prop_num_features", type=float, default=0.5)
 parser.add_argument("--sample_bigger_features", type=float, default=0.0)
+parser.add_argument("--nhead", type=float, default=4)
 
 parser.add_argument("--test", action='store_true')
 parser.add_argument('--num_classes', type=int, default=10)
@@ -411,12 +412,12 @@ config["num_features_no_pad"] = config["num_features"] if not args.curriculum el
 # a bit confusing but max_num_features is the number of features actually used, while num_feature is the total number including padding
 #TODO clean that up because max_num_features is also used elsewhere
 config["seq_len_used"] = 50 # I think this has no effect
-config["num_classes"] = 10#uniform_int_sampler_f(2, config['max_num_classes']) #TODO: make it work with return_classes
+#config["num_classes"] = 10#uniform_int_sampler_f(2, config['max_num_classes']) #TODO: make it work with return_classes
 config["num_features_used"] = {'num_features_func': uniform_int_sampler_f(3, config["num_features_no_pad"])} #TODO get rid of differentiable
 
 
-#config["nhead"] = config["emsize"] / 64
-config["nhead"] = 4
+if args.nhead is None:
+  config["nhead"] = config["emsize"] // 64
 assert config["nhead"] == int(config["nhead"]), "emsize must be a multiple of 64"
 config["nhead"] = int(config["nhead"])
 print(f"Using nhead={config['nhead']}")

@@ -74,6 +74,8 @@ parser.add_argument("--reset_optim_on_curriculum_step", action='store_true')
 # used to evaluate the model only on batches where the number of features is big enough
 parser.add_argument("--eval_prop_num_features", type=float, default=0.5)
 parser.add_argument("--sample_bigger_features", action='store_true')
+parser.add_argument("--constant_num_features", action='store_true')
+
 
 parser.add_argument("--test", action='store_true')
 

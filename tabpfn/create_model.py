@@ -381,6 +381,7 @@ def load_model_no_train(path, filename, device, config_sample=None, verbose=0):
     # print('Loading....')
     loaded_data = torch.load(
         os.path.join(path, filename), map_location='cpu')
+    print("Length of loaded data: ", len(loaded_data))
     if len(loaded_data) == 3:
         model_state, optimizer_state, config_sample = loaded_data
     elif len(loaded_data) == 4:
@@ -389,8 +390,25 @@ def load_model_no_train(path, filename, device, config_sample=None, verbose=0):
         optimizer_state = loaded_data["optimizer_state_dict"]
         scheduler_state = loaded_data["scheduler_state_dict"]
         epoch = loaded_data["epoch"]
+    elif len(loaded_data) == 6:
+        model_state = loaded_data["model_state_dict"]
+        optimizer_state = loaded_data["optimizer_state_dict"]
+        scheduler_state = loaded_data["scheduler_state_dict"]
+        epoch = loaded_data["epoch"]
+        num_features_no_pad = loaded_data["num_features_no_pad"]
+        config_sample_saved = loaded_data["config"]
+        # transfer config values
+        for k in config_sample_saved:
+            if type(config_sample_saved[k]) == dict and len(config_sample_saved[k]) == 0:
+                print('WARNING: Config key {} has no value'.format(k))
+            else:
+                config_sample[k] = config_sample_saved[k]
     else:
         model_state = loaded_data
+
+
+    
+        
     if ('differentiable_hyperparameters' in config_sample
             and 'prior_mlp_activations' in config_sample['differentiable_hyperparameters']):
         config_sample['differentiable_hyperparameters']['prior_mlp_activations']['choice_values_used'] = config_sample[

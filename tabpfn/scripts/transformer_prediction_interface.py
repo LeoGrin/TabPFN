@@ -5,7 +5,7 @@ import pathlib
 from torch.utils.checkpoint import checkpoint
 
 from tabpfn.utils import normalize_data, to_ranking_low_mem, remove_outliers
-from tabpfn.utils import NOP, normalize_by_used_features_f
+from tabpfn.utils import NOP, normalize_by_used_features_f, normalize_by_used_features_f2
 
 from sklearn.preprocessing import PowerTransformer, QuantileTransformer, RobustScaler
 
@@ -106,7 +106,8 @@ class TabPFNClassifier(BaseEstimator, ClassifierMixin):
     def __init__(self, device='cpu', base_path=pathlib.Path(__file__).parent.parent.resolve(), model_string='',
                  N_ensemble_configurations=3, no_preprocess_mode=False, multiclass_decoder='permutation',
                  feature_shift_decoder=True, only_inference=True, seed=0, no_grad=True, batch_size_inference=32,
-                 normalize_by_used_features=True, remove_outliers_bool=True, normalize_x=True):
+                 normalize_by_used_features=True, remove_outliers_bool=True, normalize_x=True, num_features_no_pad=None,
+                 normalize_by_used_features2=False, normalize_by_used_features_no_pad=False):
         """
         Initializes the classifier and loads the model. 
         Depending on the arguments, the model is either loaded from memory, from a file, or downloaded from the 
@@ -163,8 +164,15 @@ class TabPFNClassifier(BaseEstimator, ClassifierMixin):
         self.i = i
         self.model_string = model_string
         self.normalize_by_used_features = normalize_by_used_features
+        self.normalize_by_used_features2 = normalize_by_used_features2
+        self.normalize_by_used_features_no_pad  = normalize_by_used_features_no_pad
+        assert not (self.normalize_by_used_features_no_pad and self.normalize_by_used_features2)
         self.remove_outliers_bool = remove_outliers_bool
         self.normalize_x = normalize_x
+        if num_features_no_pad is None:
+            self.num_features_no_pad = self.c['num_features']
+        else:
+            self.num_features_no_pad = num_features_no_pad
 
         self.max_num_features = self.c['num_features']
         self.max_num_classes = self.c['max_num_classes']
@@ -280,8 +288,11 @@ class TabPFNClassifier(BaseEstimator, ClassifierMixin):
                                          no_grad=self.no_grad,
                                          batch_size_inference=self.batch_size_inference,
                                          normalize_by_used_features=self.normalize_by_used_features,
+                                         normalize_by_used_features2=self.normalize_by_used_features2,
+                                         normalize_by_used_features_no_pad=self.normalize_by_used_features_no_pad,
                                          normalize_x=self.normalize_x,
                                          remove_outliers_bool=self.remove_outliers_bool,
+                                         num_features_no_pad=self.num_features_no_pad,
                                          **get_params_from_config(self.c))
         prediction_, y_ = prediction.squeeze(0), y_full.squeeze(1).long()[eval_pos:]
 
@@ -321,7 +332,10 @@ def transformer_predict(model, eval_xs, eval_ys, eval_position,
                         return_logits=False,
                         remove_outliers_bool=True,
                         normalize_by_used_features=True,
+                        normalize_by_used_features2=True,
+                        normalize_by_used_features_no_pad=False,
                         normalize_x=True,
+                        num_features_no_pad=None,
                         **kwargs):
     """
 
@@ -422,8 +436,21 @@ def transformer_predict(model, eval_xs, eval_ys, eval_position,
         # Rescale X
         #TODO rescale_features is not used
         if normalize_by_used_features:
-            eval_xs = normalize_by_used_features_f(eval_xs, eval_xs.shape[-1], max_features,
-                                               normalize_with_sqrt=normalize_with_sqrt)
+            print('Normalizing by used features', eval_xs.shape[-1], num_features_no_pad)
+            # eval_xs = normalize_by_used_features_f(eval_xs, eval_xs.shape[-1], num_features_no_pad,
+            #                                     normalize_with_sqrt=normalize_with_sqrt)
+            if normalize_by_used_features2:
+                print('Normalizing by used features 2', num_features_no_pad)
+                eval_xs = normalize_by_used_features_f2(eval_xs, num_features_no_pad,
+                                                normalize_with_sqrt=normalize_with_sqrt)
+            elif normalize_by_used_features_no_pad:
+                print('Normalizing by used features no pad', num_features_no_pad, max_features)
+                eval_xs = normalize_by_used_features_f(eval_xs, num_features_no_pad, max_features,
+                                        normalize_with_sqrt=normalize_with_sqrt)
+            else:
+                print('Normalizing by used features old', eval_xs.shape[-1], max_features)
+                eval_xs = normalize_by_used_features_f(eval_xs, eval_xs.shape[-1], max_features,
+                                        normalize_with_sqrt=normalize_with_sqrt)
 
         return eval_xs.to(device)
 

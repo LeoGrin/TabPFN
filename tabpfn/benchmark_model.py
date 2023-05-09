@@ -239,13 +239,16 @@ def get_benchmark_performance(model, metric="accuracy", suites=[337, 334, "cc18"
                 #     indices = rng.choice(X_test.shape[0], 10000, replace=False)
                 #     X_test = X_test[indices]
                 #     y_test = y_test[indices]
-                #print("X_train", X_train.shape)
+                # print("X_train", X_train.shape)
                 if len(X) > 1300:
                     X_train, X_test, y_train, y_test = sklearn.model_selection.train_test_split(X, y, train_size=1024, random_state=rng)
                 else:
                     X_train, X_test, y_train, y_test = sklearn.model_selection.train_test_split(X, y, random_state=rng)
                 #Evaluate the model by computing the accuracy
-                model.fit(X_train, y_train, overwrite_warning=True)
+                if "tabpfn" in model_name:
+                    model.fit(X_train, y_train, overwrite_warning=True)
+                else:
+                    model.fit(X_train, y_train)
                 y_pred = model.predict(X_test)
                 score = accuracy_score(y_test, y_pred)
                 print("accuracy", score)
@@ -268,6 +271,8 @@ if __name__ == """__main__""":
     #checkpoint = "trees55166_49voozm8_220"
     #checkpoint = "trees69859_eouc70o7_390"
     #checkpoint = "trees676_obqe7mfl_350"
+    #checkpoint = "trees10558_8fbxi6ds_400"
+    checkpoint = "trees88370_i6pdh6lo_350"
     #checkpoint = "trees83490_bbldubv2_350"
     #checkpoint = "trees57114_9gx20nsw_370"
     #checkpoint = "trees10182_38zv803x_320"
@@ -275,17 +280,18 @@ if __name__ == """__main__""":
     #checkpoint = "trees7329_6qspdk92_400"
     #checkpoint = "trees4315_080m7u0l_390"
     #checkpoint = "trees97149_stz4qj1z_180"
-    model = TabPFNClassifier(device=device)#, no_preprocess_mode=True)
+    #model = TabPFNClassifier(device=device)#, no_preprocess_mode=True)
                              #normalize_by_used_features=False, normalize_x=True, remove_outliers_bool=True)
-    #model = TabPFNClassifier(device=device)
+    model = TabPFNClassifier(device=device, no_preprocess_mode=True,
+                             normalize_by_used_features=False)#, normalize_by_used_features=True, normalize_x=True, remove_outliers_bool=True)
     #model = GradientBoostingClassifier()
     #model = GradientBoostingClassifier()
     #model = MLPClassifier()
     #model.c["num_classes"] = 10
     #model.c["nhead"] = 8
-    #model_pytorch = load_model_no_train("model_checkpoints", f"model_{checkpoint}.pt", 0, model.c, 0)[0]
-    #model.model = model_pytorch
-    model_name = "tabpfn"
+    model_pytorch = load_model_no_train("model_checkpoints", f"model_{checkpoint}.pt", 0, model.c, 0)[0]
+    model.model = model_pytorch
+    model_name = "tabpfn_" + checkpoint + "_norm_by_used_features_false"
     res = get_benchmark_performance(model, model_name=model_name, one_hot_encoding=False, 
                                     random_rotation=False)
     #model_name = f"tabpfn_{checkpoint}"
