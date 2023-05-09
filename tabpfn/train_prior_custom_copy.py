@@ -77,12 +77,14 @@ parser.add_argument("--sample_bigger_features", action='store_true')
 parser.add_argument("--constant_num_features", action='store_true')
 
 
+
 parser.add_argument("--test", action='store_true')
 
 parser.add_argument('--num_workers', default=10, type=int)
 
 
 parser.add_argument('--emsize', default=512, type=int) # sometimes even larger is better e.g. 1024
+parser.add_argument('--nlayers', default=12, type=int)
 
 # whether to return directly the classes instead of the probabilities
 parser.add_argument('--return_classes', action='store_true')
@@ -279,7 +281,7 @@ config = {'lr': 0.0001,
   'nan_prob_no_reason': 0.0,
   'nan_prob_unknown_reason': 0.0,
   'nan_prob_a_reason': 0.0,
-  'max_num_classes': 10,
+  'max_num_classes': 10, #not used
   'num_classes': None,
   'noise_type': 'Gaussian',
   'balanced': False,

@@ -112,6 +112,7 @@ def create_model(priordataloader_class, criterion, encoder_generator, emsize=200
     # load state dict from load_weights_from_this_state_dict
     module_prefix = "module."
     state_dict = {k[len(module_prefix):] if k.startswith(module_prefix) else k: v for k, v in load_weights_from_this_state_dict.items()} if load_weights_from_this_state_dict is not None else None
+    
     if state_dict is not None:
         model.load_state_dict(state_dict)
     if initialize_with_model is not None:
