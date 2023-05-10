@@ -145,6 +145,8 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
         pbar = tqdm(enumerate(dl))
         print("len(dl)", len(dl))
         for batch, (data, targets, single_eval_pos) in pbar:
+            print("data", data)
+            print("targets", targets)
             if using_dist and not (batch % aggregate_k_gradients == aggregate_k_gradients - 1):
                 cm = model.no_sync()
             else:

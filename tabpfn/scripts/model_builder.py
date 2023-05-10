@@ -294,10 +294,10 @@ def get_model(config, device, should_train=True, verbose=False, state_dict=None,
     else:
         encoder = partial(encoders.Linear, replace_nan_by_zero=True)
 
-    if config['max_num_classes'] == 2:
-        loss = Losses.bce
-    elif config['max_num_classes'] > 2:
-        loss = Losses.ce(config['max_num_classes'])
+    #if config['max_num_classes'] == 2:
+   #     loss = Losses.bce
+   # elif config['max_num_classes'] > 2:
+    loss = Losses.ce(config['max_num_classes'])
 
     aggregate_k_gradients = 1 if 'aggregate_k_gradients' not in config else config['aggregate_k_gradients']
     check_is_compatible = False if 'multiclass_loss_type' not in config else (config['multiclass_loss_type'] == 'compatible')
