@@ -413,6 +413,7 @@ config["num_features_no_pad"] = config["num_features"] if not args.curriculum el
 #TODO clean that up because max_num_features is also used elsewhere
 config["seq_len_used"] = 50 # I think this has no effect
 #config["num_classes"] = 10#uniform_int_sampler_f(2, config['max_num_classes']) #TODO: make it work with return_classes
+config["max_num_classes"] = config["num_classes"]
 config["num_features_used"] = {'num_features_func': uniform_int_sampler_f(3, config["num_features_no_pad"])} #TODO get rid of differentiable
 
 

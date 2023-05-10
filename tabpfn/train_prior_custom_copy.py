@@ -407,8 +407,8 @@ print(f"Using nhead={config['nhead']}")
         
 
 config["num_features_no_pad"] = config["num_features"] if not args.curriculum else args.curriculum_start
-# a bit confusing but max_num_features is the number of features actually used, while num_feature is the total number including padding
-#TODO clean that up because max_num_features is also used elsewhere
+
+config["max_num_classes"] = config["num_classes"]
 config["seq_len_used"] = 50 # I think this has no effect
 config["num_features_used"] = {'num_features_func': uniform_int_sampler_f(3, config["num_features_no_pad"])} #TODO get rid of differentiable
 
