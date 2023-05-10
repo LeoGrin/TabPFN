@@ -476,6 +476,24 @@ if args.checkpoint_file:
         optimizer_state = loaded_data["optimizer_state_dict"]
         scheduler_state = loaded_data["scheduler_state_dict"]
         epoch = loaded_data["epoch"]
+    elif len(loaded_data) == 6:
+      model_state = loaded_data["model_state_dict"]
+      optimizer_state = loaded_data["optimizer_state_dict"]
+      scheduler_state = loaded_data["scheduler_state_dict"]
+      epoch = loaded_data["epoch"]
+      num_features_no_pad = loaded_data["num_features_no_pad"]
+      config_sample_saved = loaded_data["config"]
+      # find all mismatch between config_sample and config_sample_saved
+      for key, value in config_sample_saved.items():
+        if key not in config_sample:
+          print(f"WARNING: {key} not in config_sample")
+        elif config_sample[key] != value:
+          print(f"WARNING: {key} has different value: {config_sample[key]} vs {value}")
+      for key, value in config_sample.items():
+        if key not in config_sample_saved:
+          print(f"WARNING: {key} not in config_sample_saved")
+        elif config_sample_saved[key] != value:
+          print(f"WARNING: {key} has different value: {config_sample_saved[key]} vs {value}")
     else:
         model_state = loaded_data
       
