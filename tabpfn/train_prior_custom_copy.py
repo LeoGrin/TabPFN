@@ -224,8 +224,10 @@ config = {'lr': 0.0001,
   'nhid_factor': 2,
   'eval_positions': None,
   'sampling': 'mixed',
-  'epochs': 250,
-  'num_steps': 128,
+  #'epochs': 250,
+  'epochs': 400,
+  #'num_steps': 128,
+  'num_steps': 256,
   'verbose': False,
   'pre_sample_causes': True,
   'multiclass_type': 'rank',
@@ -237,7 +239,7 @@ config = {'lr': 0.0001,
   'max_num_classes': 10,
   'num_classes': None,
   'noise_type': 'Gaussian',
-  'balanced': True,
+  'balanced': False,#True,
   'normalize_to_ranking': False,
   'set_value_to_nan': 0.1,
   'normalize_by_used_features': True,
@@ -312,7 +314,8 @@ config = {'lr': 0.0001,
   'aggregate_k_gradients': 8,
   'recompute_attn': True,
   'bptt_extra_samples': None,
-  'bptt': 1152,
+  #'bptt': 1152,
+  'bptt': 5048,
   'dynamic_batch_size': False,
   'multiclass_loss_type': 'nono',
   'output_multiclass_ordered_p': 0.0,
@@ -338,8 +341,10 @@ config = {'lr': 0.0001,
   'attend_to_global_tokens_only_at_test': False,
   "max_eval_pos": 1000}
 
+
 config["seq_len_used"] = 50
-config["num_classes"] = 2#uniform_int_sampler_f(2, config['max_num_classes'])
+#config["num_classes"] = 2#uniform_int_sampler_f(2, config['max_num_classes'])
+config["num_classes"] = uniform_int_sampler_f(2, config['max_num_classes'])
 config["num_features_used"] = {'num_features_func': uniform_int_sampler_f(3, config['num_features'])}
 
 

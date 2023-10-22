@@ -1,0 +1,62 @@
+wandb: Currently logged in as: leogrin. Use `wandb login --relogin` to force relogin
+wandb: wandb version 0.15.12 is available!  To upgrade, please run:
+wandb:  $ pip install wandb --upgrade
+wandb: Tracking run with wandb version 0.15.0
+wandb: Run data is saved locally in /scratch/lgrinszt/TabPFN/tabpfn/wandb/run-20231022_213645-6a0zhd8k
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run gallant-universe-327
+wandb: ⭐️ View project at https://wandb.ai/leogrin/tabpfn_training
+wandb: 🚀 View run at https://wandb.ai/leogrin/tabpfn_training/runs/6a0zhd8k
+Using device cuda:0
+Using trees prior with n_estimators_lambda=0.15, n_estimators=None, max_depth_lambda=0.35
+Using p_categorical=0.15
+Using batch_size=32
+Using correlation_proba_min=0.0
+Using correlation_proba_max=0.2
+Using correlation_strength_min=0.0
+Using correlation_strength_max=0.2
+Using random_feature_removal=0.2
+initializing wandb
+{'lr': 0.0001, 'dropout': 0.0, 'emsize': 512, 'batch_size': 32, 'nlayers': 12, 'num_features': 100, 'nhead': 4, 'nhid_factor': 2, 'eval_positions': None, 'sampling': 'mixed', 'epochs': 400, 'num_steps': 256, 'verbose': False, 'pre_sample_causes': True, 'multiclass_type': 'rank', 'nan_prob_unknown_reason_reason_prior': 1.0, 'categorical_feature_p': 0.0, 'nan_prob_no_reason': 0.0, 'nan_prob_unknown_reason': 0.0, 'nan_prob_a_reason': 0.0, 'max_num_classes': 10, 'num_classes': <function <lambda>.<locals>.<lambda> at 0x7f61f2437790>, 'noise_type': 'Gaussian', 'balanced': False, 'normalize_to_ranking': False, 'set_value_to_nan': 0.1, 'normalize_by_used_features': True, 'num_features_used': <function <lambda>.<locals>.<lambda> at 0x7f61f2437820>, 'num_categorical_features_sampler_a': -1.0, 'differentiable_hyperparameters': {'distribution': 'uniform', 'min': 1000000.0, 'max': 1000001.0}, 'prior_type': 'trees', 'differentiable': True, 'flexible': True, 'aggregate_k_gradients': 1, 'recompute_attn': True, 'bptt_extra_samples': None, 'bptt': 5048, 'dynamic_batch_size': False, 'multiclass_loss_type': 'nono', 'output_multiclass_ordered_p': 0.0, 'normalize_with_sqrt': False, 'new_mlp_per_example': True, 'prior_mlp_scale_weights_sqrt': True, 'batch_size_per_gp_sample': None, 'normalize_ignore_label_too': False, 'differentiable_hps_as_style': False, 'random_feature_rotation': True, 'rotate_normalized_labels': True, 'normalize_on_train_only': True, 'mix_activations': False, 'weight_decay': 0.0, 'use_flash_attention': True, 'canonical_y_encoder': False, 'total_available_time_in_s': None, 'train_mixed_precision': True, 'efficient_eval_masking': True, 'hardware_batch_size': 4, 'num_global_att_tokens': 0, 'use_seperate_decoder': False, 'attend_to_global_tokens_only_at_test': False, 'max_eval_pos': 1000, 'seq_len_used': 50, 'n_estimators_lambda': 0.15, 'n_estimators': None, 'max_depth_lambda': 0.35, 'min_categories': 2, 'max_categories': 10, 'p_categorical': 0.15, 'correlation_proba_min': 0.0, 'correlation_proba_max': 0.2, 'correlation_strength_min': 0.0, 'correlation_strength_max': 0.2, 'random_feature_removal': 0.2, 'use_wandb': True, 'name': 'trees96005', 'save_every': 10}
+Using style prior: True
+{'recompute_attn': True}
+<module 'wandb' from '/scratch/lgrinszt/micromamba/envs/tabpfn/lib/python3.9/site-packages/wandb/__init__.py'>
+Using cuda:0 device
+Batch size: 32
+Using a Transformer with 25.82 M parameters
+Using distributed training: False
+0it [00:00, ?it/s]0it [00:04, ?it/s]
+Traceback (most recent call last):
+  File "/scratch/lgrinszt/TabPFN/tabpfn/train_prior_custom_copy.py", line 400, in <module>
+    model = get_model(config_sample, device, should_train=True, verbose=1, state_dict=checkpoint if args.checkpoint_file else None)
+  File "/scratch/lgrinszt/TabPFN/tabpfn/scripts/model_builder.py", line 307, in get_model
+    model = train(model_proto.DataLoader
+  File "/scratch/lgrinszt/TabPFN/tabpfn/train.py", line 175, in train
+    train_epoch()
+  File "/scratch/lgrinszt/TabPFN/tabpfn/train.py", line 102, in train_epoch
+    output = model(tuple(e.to(device) if torch.is_tensor(e) else e for e in data) if isinstance(data, tuple) else data.to(device)
+  File "/scratch/lgrinszt/micromamba/envs/tabpfn/lib/python3.9/site-packages/torch/nn/modules/module.py", line 1051, in _call_impl
+    return forward_call(*input, **kwargs)
+  File "/scratch/lgrinszt/TabPFN/tabpfn/transformer.py", line 154, in forward
+    output = self.transformer_encoder(src, src_mask)
+  File "/scratch/lgrinszt/micromamba/envs/tabpfn/lib/python3.9/site-packages/torch/nn/modules/module.py", line 1051, in _call_impl
+    return forward_call(*input, **kwargs)
+  File "/scratch/lgrinszt/TabPFN/tabpfn/transformer.py", line 240, in forward
+    output = mod(output, src_mask=mask, src_key_padding_mask=src_key_padding_mask)
+  File "/scratch/lgrinszt/micromamba/envs/tabpfn/lib/python3.9/site-packages/torch/nn/modules/module.py", line 1051, in _call_impl
+    return forward_call(*input, **kwargs)
+  File "/scratch/lgrinszt/TabPFN/tabpfn/layer.py", line 109, in forward
+    src_right = self.self_attn(src_[single_eval_position:], src_[:single_eval_position], src_[:single_eval_position])[0]
+  File "/scratch/lgrinszt/micromamba/envs/tabpfn/lib/python3.9/site-packages/torch/nn/modules/module.py", line 1051, in _call_impl
+    return forward_call(*input, **kwargs)
+  File "/scratch/lgrinszt/micromamba/envs/tabpfn/lib/python3.9/site-packages/torch/nn/modules/activation.py", line 1031, in forward
+    attn_output, attn_output_weights = F.multi_head_attention_forward(
+  File "/scratch/lgrinszt/micromamba/envs/tabpfn/lib/python3.9/site-packages/torch/nn/functional.py", line 5082, in multi_head_attention_forward
+    attn_output, attn_output_weights = _scaled_dot_product_attention(q, k, v, attn_mask, dropout_p)
+  File "/scratch/lgrinszt/micromamba/envs/tabpfn/lib/python3.9/site-packages/torch/nn/functional.py", line 4825, in _scaled_dot_product_attention
+    attn = torch.bmm(q, k.transpose(-2, -1))
+RuntimeError: CUDA out of memory. Tried to allocate 624.00 MiB (GPU 0; 39.44 GiB total capacity; 37.45 GiB already allocated; 108.88 MiB free; 37.52 GiB reserved in total by PyTorch)
+wandb: Waiting for W&B process to finish... (failed 1). Press Control-C to abort syncing.
+wandb: 🚀 View run gallant-universe-327 at: https://wandb.ai/leogrin/tabpfn_training/runs/6a0zhd8k
+wandb: Synced 6 W&B file(s), 0 media file(s), 2 artifact file(s) and 0 other file(s)
+wandb: Find logs at: ./wandb/run-20231022_213645-6a0zhd8k/logs

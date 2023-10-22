@@ -184,9 +184,11 @@ def get_validation_performance(model, metric="accuracy", suites=[337, 334],
         # with columns: task_id, model, score
         df = pd.DataFrame(columns=['task_id', 'model', 'score'])
         for task_id in accepted_tasks:
-            df = df.append({'task_id': task_id, 'model': 'model', 'score': results_model[task_id]}, ignore_index=True)
+            #df = df.append({'task_id': task_id, 'model': 'model', 'score': results_model[task_id]}, ignore_index=True)
+            df = pd.concat([df, pd.DataFrame({'task_id': task_id, 'model': 'model', 'score': results_model[task_id]}, index=[0])], ignore_index=True)
             for name, baseline in baselines:
-                df = df.append({'task_id': task_id, 'model': name, 'score': results_baselines[task_id][name]}, ignore_index=True)
+                #df = df.append({'task_id': task_id, 'model': name, 'score': results_baselines[task_id][name]}, ignore_index=True)
+                df = pd.concat([df, pd.DataFrame({'task_id': task_id, 'model': name, 'score': results_baselines[task_id][name]}, index=[0])], ignore_index=True)
         
         # Compute the mean rank of each model across all tasks
         # group by model and task_id, and compute the mean accuracy

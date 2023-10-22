@@ -183,11 +183,23 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
                 model_sklearn = TabPFNClassifier(no_preprocess_mode=True, device=device)
                 model_pytorch = load_model_no_train_from_pytorch(model, config_sample=model_sklearn.c)[0]
                 model_sklearn.model = model_pytorch
-                try:
-                    measure_on_datasets = get_validation_performance(model_sklearn)
-                except:
-                    print("Failed to get validation performance")
-                    measure_on_datasets = {}
+                #try:
+                measure_on_datasets = get_validation_performance(model_sklearn)
+                #except:
+                #    print("Failed to get validation performance")
+                #    measure_on_datasets = {}
+                print({
+                    "epoch": epoch,
+                    "train_loss": total_loss,
+                    "val_loss": val_score,
+                    "lr": optimizer.param_groups[0]['lr'],
+                    "time_to_get_batch": time_to_get_batch,
+                    "forward_time": forward_time,
+                    "step_time": step_time,
+                    "nan_share": nan_share,
+                    "ignore_share": ignore_share,
+                    **measure_on_datasets
+                })
                 wandb.log({
                     "epoch": epoch,
                     "train_loss": total_loss,
