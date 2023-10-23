@@ -242,6 +242,8 @@ def get_model(config, device, should_train=True, verbose=False, state_dict=None,
         elif config['prior_type'] == 'trees':
             prior_hyperparameters = get_trees_prior_hyperparameters(config)
             print(prior_hyperparameters)
+            # we want to handle padding, and normalization by used features in the trees prior, not in flexible_categorical
+            assert prior_hyperparameters['num_features'] == prior_hyperparameters['num_features_max'] == config['num_features_used']
             model_proto = priors.trees
             extra_kwargs.update({'num_features_max': config['num_features_max'],
                                  'num_features_sampler': config['num_features_sampler'],

@@ -350,7 +350,8 @@ config = {'lr': 0.0001,
   'aggregate_k_gradients': 8,
   'recompute_attn': True,
   'bptt_extra_samples': None,
-  'bptt': 1152,
+  #'bptt': 1152,
+  'bptt': 5048,
   'dynamic_batch_size': False,
   'multiclass_loss_type': 'nono',
   'output_multiclass_ordered_p': 0.0,
@@ -384,10 +385,10 @@ for param_name, param_value in args.__dict__.items():
 
 
 #config["num_features_used"] = {'num_features_func': uniform_int_sampler_f(3, config['num_features'])}
-#TODO: if tree
-config["num_features_used"] = config["num_features"] # we don't want flexible_categorical to handle padding and normalization by used features, as we do this in tree
-config["num_features_max"] = config["num_features"]
-config["num_features_sampler"] = uniform_int_sampler_f(3, config['num_features'])
+if args.prior == "trees":
+  config["num_features_used"] = config["num_features"] # we don't want flexible_categorical to handle padding and normalization by used features, as we do this in tree
+  config["num_features_max"] = config["num_features"]
+  config["num_features_sampler"] = uniform_int_sampler_f(3, config['num_features'])
 config["seq_len_used"] = 50
 
 config["num_classes"] = uniform_int_sampler_f(2, config['max_num_classes'])
@@ -406,20 +407,6 @@ assert config["nhead"] == int(config["nhead"]), "emsize must be a multiple of 64
 config["nhead"] = int(config["nhead"])
 print(f"Using nhead={config['nhead']}")
         
-
-
-
-
-config["remove_outliers_in_flexible_categorical"] = True
-config["normalize_x_in_flexible_categorical"] = True
-
-if args.prior == "linear":
-  #already normal
-  #TODO: change this when the linear prior becomes more flexible
-  config["sampling"] = "normal"
-  config["remove_outliers_in_flexible_categorical"] = False
-  config["normalize_x_in_flexible_categorical"] = False
-  config["random_feature_rotation"] = False
 
 
 

@@ -137,7 +137,8 @@ def get_batch(batch_size, seq_len, num_features_max, num_features_sampler, hyper
         n_estimators = (1 + int(np.random.exponential(1. / hyperparameters['n_estimators_lambda']))) if (hyperparameters['n_estimators'] is None) else hyperparameters['n_estimators']
         time_forest = time.time()
         forest = ExtraTreesClassifier(max_depth=max_depth, n_estimators=n_estimators, max_features=1, n_jobs=1) # max_features=1 means that the splits are totally random
-        num_classes = hyperparameters['num_classes']        
+        num_classes = hyperparameters['num_classes']   
+        print("num_classes tree", num_classes)     
 
         fake_y = np.random.randint(0, num_classes, data.shape[0])
         # label encoder to prevent holes in the class labels (e.g. 0, 1, 3)
@@ -169,8 +170,6 @@ def get_batch(batch_size, seq_len, num_features_max, num_features_sampler, hyper
         # normalize by used features
         if hyperparameters["normalize_by_used_features"]:
             data = normalize_by_used_features_f(data, data.shape[-1], num_features_max, normalize_with_sqrt=hyperparameters["normalize_with_sqrt"])
-
-        print("data shape", data.shape)
 
         return data.reshape(-1, 1, num_features).float(), torch.from_numpy(y).reshape(-1, 1, num_outputs).float()
 
