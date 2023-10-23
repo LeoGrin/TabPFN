@@ -171,6 +171,8 @@ def get_gp_mix_prior_hyperparameters(config):
 def get_gp_prior_hyperparameters(config):
     return {hp: (list(config[hp].values())[0]) if type(config[hp]) is dict else config[hp] for hp in config}
 
+def get_trees_prior_hyperparameters(config):
+    return {hp: (list(config[hp].values())[0]) if type(config[hp]) is dict else config[hp] for hp in config}
 
 def get_meta_gp_prior_hyperparameters(config):
     from tabpfn.priors.utils import trunc_norm_sampler_f
@@ -237,6 +239,13 @@ def get_model(config, device, should_train=True, verbose=False, state_dict=None,
         elif config['prior_type'] == 'gp_mix':
             prior_hyperparameters = get_gp_mix_prior_hyperparameters(config)
             model_proto = priors.fast_gp_mix
+        elif config['prior_type'] == 'trees':
+            prior_hyperparameters = get_trees_prior_hyperparameters(config)
+            print(prior_hyperparameters)
+            model_proto = priors.trees
+            extra_kwargs.update({'num_features_max': config['num_features_max'],
+                                 'num_features_sampler': config['num_features_sampler'],
+            })
         else:
             raise Exception()
 
