@@ -20,6 +20,7 @@ class TransformerModel(nn.Module):
         self.model_type = 'Transformer'
         encoder_layer_creator = lambda: TransformerEncoderLayer(ninp, nhead, nhid, dropout, activation=activation,
                                                                 pre_norm=pre_norm, recompute_attn=recompute_attn)
+
         self.transformer_encoder = TransformerEncoder(encoder_layer_creator(), nlayers)\
             if all_layers_same_init else TransformerEncoderDiffInit(encoder_layer_creator, nlayers)
         self.ninp = ninp
@@ -97,14 +98,15 @@ class TransformerModel(nn.Module):
                 nn.init.zeros_(attn.out_proj.weight)
                 nn.init.zeros_(attn.out_proj.bias)
 
-    def forward(self, src, src_mask=None, single_eval_pos=None):
+    def forward(self, src, src_mask=None, single_eval_pos=None, x_already_encoded=False):
         assert isinstance(src, tuple), 'inputs (src) have to be given as (x,y) or (style,x,y) tuple'
 
         if len(src) == 2: # (x,y) and no style
             src = (None,) + src
 
         style_src, x_src, y_src = src
-        x_src = self.encoder(x_src)
+        if not x_already_encoded:
+            x_src = self.encoder(x_src)
         y_src = self.y_encoder(y_src.unsqueeze(-1) if len(y_src.shape) < len(x_src.shape) else y_src)
         style_src = self.style_encoder(style_src).unsqueeze(0) if self.style_encoder else \
             torch.tensor([], device=x_src.device)
@@ -128,7 +130,6 @@ class TransformerModel(nn.Module):
                 src_mask = (self.generate_global_att_globaltokens_matrix(*src_mask_args).to(x_src.device),
                             self.generate_global_att_trainset_matrix(*src_mask_args).to(x_src.device),
                             self.generate_global_att_query_matrix(*src_mask_args).to(x_src.device))
-
         train_x = x_src[:single_eval_pos] + y_src[:single_eval_pos]
         src = torch.cat([global_src, style_src, train_x, x_src[single_eval_pos:]], 0)
 
@@ -138,6 +139,7 @@ class TransformerModel(nn.Module):
         if self.pos_encoder is not None:
             src = self.pos_encoder(src)
 
+        #src = src.unsqueeze(0)
         output = self.transformer_encoder(src, src_mask)
         output = self.decoder(output)
         return output[single_eval_pos+len(style_src)+(self.global_att_embeddings.num_embeddings if self.global_att_embeddings else 0):]

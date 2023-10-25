@@ -5,7 +5,7 @@ import torch
 from torch import nn
 
 from .utils import get_batch_to_dataloader
-from tabpfn.utils import normalize_data, nan_handling_missing_for_unknown_reason_value, nan_handling_missing_for_no_reason_value, nan_handling_missing_for_a_reason_value, to_ranking_low_mem, remove_outliers, normalize_by_used_features_f
+from tabpfn.utils import normalize_data, nan_handling_missing_for_unknown_reason_value, nan_handling_missing_for_no_reason_value, nan_handling_missing_for_a_reason_value, to_ranking_low_mem, remove_outliers, normalize_by_used_features_f, normalize_by_used_features_f2
 from .utils import randomize_classes, CategoricalActivation
 from .utils import uniform_int_sampler_f
 
@@ -102,7 +102,21 @@ class FlexibleCategorical(torch.nn.Module):
                                 hyperparameters.keys()}
         self.args = args
         self.args_passed = {**self.args}
-        self.args_passed.update({'num_features': self.h['num_features_used']})
+        #print("Num features used", self.h['num_features_used'])
+        #print("Features no pad", self.h['num_features_no_pad'])
+        #self.args_passed.update({'num_features': self.h['num_features_used']})
+        assert not (hyperparameters["sample_bigger_features"] and hyperparameters["constant_num_features"])
+        if hyperparameters["sample_bigger_features"] > 0:
+            if torch.rand(1) > hyperparameters["sample_bigger_features"]:
+                features_sampler = uniform_int_sampler_f(3, self.h['num_features_no_pad'])
+            else:
+                features_sampler = uniform_int_sampler_f(self.h['num_features_no_pad'] // 2, self.h['num_features_no_pad'])
+        elif hyperparameters["constant_num_features"]:
+            features_sampler = lambda: self.h['num_features_no_pad']
+        else:
+            features_sampler = uniform_int_sampler_f(3, self.h['num_features_no_pad']) #TODO this should be set in config
+        #self.h['num_features_used'] = features_sampler()
+        self.args_passed.update({'num_features_max': self.h['num_features_no_pad'], "num_features_sampler": features_sampler})
         self.get_batch = get_batch
 
         if self.h['num_classes'] == 0:
@@ -194,25 +208,22 @@ class FlexibleCategorical(torch.nn.Module):
             start = time.time()
 
         # Cast to classification if enabled
-        if not self.h.get('return_classes_in_trees_prior', False):
-            y = self.class_assigner(y).float()
+        y = self.class_assigner(y).float()
 
         if time_it:
             print('Flex Forward Block 4', round(time.time() - start, 3))
             start = time.time()
-        if not self.h["prior"] == "trees":
-            # we handle that directly in the tree prior
-            if self.h['normalize_by_used_features']:
+        if self.h['normalize_by_used_features']:
                 x = normalize_by_used_features_f(x, self.h['num_features_used'], self.args['num_features'], normalize_with_sqrt=self.h.get('normalize_with_sqrt',False))
         if time_it:
             print('Flex Forward Block 5', round(time.time() - start, 3))
 
         start = time.time()
         # Append empty features if enabled
-        if not self.h["prior"] == "trees":
-            x = torch.cat(
-                [x, torch.zeros((x.shape[0], x.shape[1], self.args['num_features'] - self.h['num_features_used']),
-                                device=x.device)], -1)
+        x = torch.cat(
+            [x, torch.zeros((x.shape[0], x.shape[1], self.args['num_features'] - x.shape[2])
+                            ,device=self.args['device'])
+             ], -1)
         if time_it:
             print('Flex Forward Block 6', round(time.time() - start, 3))
 
@@ -267,12 +278,9 @@ def get_batch(batch_size, seq_len, num_features, get_batch, device, hyperparamet
     # Sample one seq_len for entire batch
     seq_len = hyperparameters['seq_len_used']() if callable(hyperparameters['seq_len_used']) else seq_len
 
-    args = {'device': device, 'seq_len': seq_len, 'num_features': num_features, 'batch_size': batch_size_per_gp_sample, **kwargs}
+    args = {'device': "cpu", 'seq_len': seq_len, 'num_features': num_features, 'batch_size': batch_size_per_gp_sample, **kwargs}
 
-    if hyperparameters["prior"] == "trees":
-        models = [FlexibleCategorical(get_batch, hyperparameters, args) for _ in range(num_models)]
-    else:
-        models = [FlexibleCategorical(get_batch, hyperparameters, args).to(device) for _ in range(num_models)]
+    models = [FlexibleCategorical(get_batch, hyperparameters, args).to(device) for _ in range(num_models)]
 
     sample = [model(batch_size=batch_size_per_gp_sample) for model in models]
 

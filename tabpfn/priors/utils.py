@@ -16,6 +16,7 @@ import torch
 import numpy as np
 import random
 
+
 def make_dataloader(dataloader_kwargs, get_batch_kwargs, test_loader=False):
     if test_loader:
         get_batch_kwargs["batch_size"] = 1
@@ -65,6 +66,7 @@ class PriorDataset(IterableDataset):
         self.get_batch_method = get_batch_method
         self.model = None
         self.epoch = 0
+        self.step = 0
         self.test_loader = test_loader
         print("DataLoader.__dict__", self.__dict__)
 
@@ -92,7 +94,11 @@ class PriorDataset(IterableDataset):
         #TODO
         #if batch.single_eval_pos is None:
         #    batch.single_eval_pos = single_eval_pos
-
+        self.step += self.batch_size
+        if self.step >= self.num_steps:
+            self.step -= self.num_steps
+            self.epoch += 1
+        
 
         return (0, batch[0], batch[1]), batch[2], single_eval_pos # data (style, x, y), target, single_eval_pos
 
@@ -117,7 +123,7 @@ class PriorDataset(IterableDataset):
         else:
             it = iter(self.gbm, 1)
         return it
-
+    
 def plot_features(data, targets, fig=None, categorical=True):
     import seaborn as sns
     import matplotlib.pyplot as plt
@@ -146,9 +152,9 @@ def plot_features(data, targets, fig=None, categorical=True):
             sub_ax.set_yticks([])
             if d == d2:
                 if categorical:
-                    sns.kdeplot(data[:, d],hue=targets[:],ax=sub_ax,legend=False, palette="deep")
+                    sns.kdeplot(x=data[:, d],hue=targets[:],ax=sub_ax,legend=False, palette="deep")
                 else:
-                    sns.kdeplot(data[:, d], ax=sub_ax, legend=False)
+                    sns.kdeplot(x=data[:, d], ax=sub_ax, legend=False)
                 sub_ax.set(ylabel=None)
             else:
                 if categorical:

@@ -63,6 +63,8 @@ parser.add_argument('--bptt', type=int, default=1152)
 parser.add_argument('--max_eval_pos', type=int, default=1000)
 parser.add_argument('--aggregate_k_gradients', type=int, default=1)
 #parser.add_argument('--scheduler', type=str, default="cosine")
+parser.add_argument('--get_openml_from_pickle', action='store_true') #TODO
+
 
 parser.add_argument("--test", action='store_true')
 

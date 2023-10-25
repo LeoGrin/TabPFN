@@ -19,7 +19,29 @@ import tabpfn.positional_encodings as positional_encodings
 from tabpfn.utils import init_dist
 from torch.cuda.amp import autocast, GradScaler
 from torch import nn
+import wandb
+import time
 from tqdm import tqdm
+import openml
+from tabpfn.scripts.transformer_prediction_interface import TabPFNClassifier
+from evaluate_model import get_validation_performance
+from create_model import create_model, load_model_no_train_from_pytorch, create_dataloader
+import neptune
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import balanced_accuracy_score
+import numpy as np
+from priors.utils import uniform_int_sampler_f
+
+def remove_callables(config):
+    clean_config = {}
+    for key, value in config.items():
+        if not callable(value):
+            if isinstance(value, dict):
+                clean_config[key] = remove_callables(value)
+            else:
+                clean_config[key] = value
+    return clean_config
+
 
 class Losses():
     gaussian = nn.GaussianNLLLoss(full=True, reduction='none')
@@ -28,70 +50,43 @@ class Losses():
         num_classes = num_classes.shape[0] if torch.is_tensor(num_classes) else num_classes
         return nn.CrossEntropyLoss(reduction='none', weight=torch.ones(num_classes))
     bce = nn.BCEWithLogitsLoss(reduction='none')
+    
 
 
 
 def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=200, nlayers=6, nhead=2, dropout=0.0,
           epochs=10, steps_per_epoch=100, batch_size=200, bptt=10, lr=None, weight_decay=0.0, warmup_epochs=10, input_normalization=False,
-          y_encoder_generator=None, pos_encoder_generator=None, decoder=None, extra_prior_kwargs_dict={}, scheduler=get_cosine_schedule_with_warmup,
+          y_encoder_generator=None, pos_encoder_generator=None, decoder=None, extra_prior_kwargs_dict={}, scheduler_func=get_cosine_schedule_with_warmup,
           load_weights_from_this_state_dict=None, validation_period=10, single_eval_pos_gen=None, bptt_extra_samples=None, gpu_device='cuda:0',
           aggregate_k_gradients=1, verbose=True, style_encoder_generator=None, epoch_callback=None,
-          initializer=None, initialize_with_model=None, train_mixed_precision=False, efficient_eval_masking=True, **model_extra_args
+          initializer=None, initialize_with_model=None, train_mixed_precision=False, efficient_eval_masking=True, use_wandb=False, 
+          wandb_offline=False, use_neptune=False, validate_on_datasets=False, name="default", save_every=20, config={}, 
+          get_openml_from_pickle=False, **model_extra_args
           ):
-    # generate a random name for the model
-    name = datetime.datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
-    device = gpu_device if torch.cuda.is_available() else 'cpu:0'
-    print(f'Using {device} device')
+    model, dl, device, n_out, validation_dl = create_model(priordataloader_class, criterion, encoder_generator, emsize, nhid, nlayers, nhead, dropout,
+                                                       epochs, steps_per_epoch, batch_size, bptt, lr, weight_decay, warmup_epochs, input_normalization,
+                                                       y_encoder_generator, pos_encoder_generator, decoder, extra_prior_kwargs_dict, scheduler_func,
+                                                       load_weights_from_this_state_dict, validation_period, single_eval_pos_gen, bptt_extra_samples, gpu_device,
+                                                       aggregate_k_gradients, verbose, style_encoder_generator, epoch_callback,
+                                                       initializer, initialize_with_model, train_mixed_precision, efficient_eval_masking, use_wandb, name, save_every, 
+                                                       10, **model_extra_args)#TODO
+    # using_dist, rank, device = init_dist(device)
+    # print("Using distributed training:", using_dist)
+    # if using_dist:
+    #     print("Distributed training")
+    #     model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[rank], output_device=rank, broadcast_buffers=False)
+    # dl.model = model
     using_dist, rank, device = init_dist(device)
-    single_eval_pos_gen = single_eval_pos_gen if callable(single_eval_pos_gen) else lambda: single_eval_pos_gen
-
-    def eval_pos_seq_len_sampler():
-        single_eval_pos = single_eval_pos_gen()
-        if bptt_extra_samples:
-            return single_eval_pos, single_eval_pos + bptt_extra_samples
-        else:
-            return single_eval_pos, bptt
-    get_batch_args = {"num_steps":steps_per_epoch, "batch_size":batch_size, "eval_pos_seq_len_sampler":eval_pos_seq_len_sampler, "seq_len_maximum":bptt+(bptt_extra_samples if bptt_extra_samples else 0), "device":device, **extra_prior_kwargs_dict}
-    dataloader_args = {"num_workers":10, "pin_memory":True, "persistent_workers":True, "prefetch_factor":3}
-    dl = priordataloader_class(dataloader_args, get_batch_args)
-
-
-    encoder = encoder_generator(dl.dataset.num_features, emsize)
-    #style_def = dl.get_test_batch()[0][0] # the style in batch of the form ((style, x, y), target, single_eval_pos)
-    style_def = None
-    #print(f'Style definition of first 3 examples: {style_def[:3] if style_def is not None else None}')
-    style_encoder = style_encoder_generator(style_def.shape[1], emsize) if (style_def is not None) else None
-    if isinstance(criterion, nn.GaussianNLLLoss):
-        n_out = 2
-    elif isinstance(criterion, nn.CrossEntropyLoss):
-        n_out = criterion.weight.shape[0]
-    else:
-        n_out = 1
-
-    model = TransformerModel(encoder, n_out, emsize, nhead, nhid, nlayers, dropout, style_encoder=style_encoder,
-                             y_encoder=y_encoder_generator(1, emsize), input_normalization=input_normalization,
-                             pos_encoder=(pos_encoder_generator or positional_encodings.NoPositionalEncoding)(emsize, bptt*2),
-                             decoder=decoder, init_method=initializer, efficient_eval_masking=efficient_eval_masking, **model_extra_args
-                             )
-    model.criterion = criterion
-    if load_weights_from_this_state_dict is not None:
-        model.load_state_dict(load_weights_from_this_state_dict)
-    if initialize_with_model is not None:
-        model.init_from_small_model(initialize_with_model)
-
-    print(f"Using a Transformer with {sum(p.numel() for p in model.parameters())/1000/1000:.{2}f} M parameters")
-
-    try:
-        for (k, v), (k2, v2) in zip(model.state_dict().items(), initialize_with_model.state_dict().items()):
-            print(k, ((v - v2) / v).abs().mean(), v.shape)
-    except Exception:
-        pass
-
-    model.to(device)
+    #torch.cuda.set_device(rank)
+    #gpu = torch.device("cuda")
+    model = model.to(device)
+    print("Using distributed training:", using_dist)
     if using_dist:
         print("Distributed training")
-        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[rank], output_device=rank, broadcast_buffers=False)
+        #model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[rank], output_device=rank, broadcast_buffers=False)
+        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[rank])
     dl.model = model
+    
 
 
     # learning rate
@@ -99,14 +94,46 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
         lr = get_openai_lr(model)
         print(f"Using OpenAI max lr of {lr}.")
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
-    scheduler = scheduler(optimizer, warmup_epochs, epochs if epochs is not None else 100) # when training for fixed time lr schedule takes 100 steps
+    print("scheduler", scheduler_func)
+    scheduler = scheduler_func(optimizer, warmup_epochs, epochs if epochs is not None else 100) # when training for fixed time lr schedule takes 100 steps
 
     scaler = GradScaler() if train_mixed_precision else None
 
     # check that everything uses up-to-date APIs
     utils.check_compatibility(dl)
+    
+    if use_wandb and rank == 0:
+        if wandb_offline:
+            print("setting wandb offline")
+            os.environ['WANDB_MODE'] = 'offline'
+        print("initializing wandb")
+        wandb.init(project="tabpfn_training-3", entity="leogrin")
+        wandb.config.update(config)
+        print("wandb initialized")
+        print("name", name)
+        print("wandb id", wandb.run.id)
+        name += "_" + wandb.run.id
+    if use_neptune and rank == 0:
+        print("initializing neptune")
+        if wandb_offline:
+            print("setting neptune offline")
+            run = neptune.init_run(
+                project="leogrin/tabpfn-training",
+                api_token="eyJhcGlfYWRkcmVzcyI6Imh0dHBzOi8vYXBwLm5lcHR1bmUuYWkiLCJhcGlfdXJsIjoiaHR0cHM6Ly9hcHAubmVwdHVuZS5haSIsImFwaV9rZXkiOiJkNGY1NTJlYS0wNzgzLTQxM2EtOWFlZi02NmVmNmQ2MTRlNWIifQ==",
+                mode="offline"
+            )
+        else:
+            print("setting neptune online")
+            run = neptune.init_run(
+                project="leogrin/tabpfn-training",
+                api_token="eyJhcGlfYWRkcmVzcyI6Imh0dHBzOi8vYXBwLm5lcHR1bmUuYWkiLCJhcGlfdXJsIjoiaHR0cHM6Ly9hcHAubmVwdHVuZS5haSIsImFwaV9rZXkiOiJkNGY1NTJlYS0wNzgzLTQxM2EtOWFlZi02NmVmNmQ2MTRlNWIifQ=="
+            )
+        config["wandb_id"] = wandb.run.id
+        run["config"] = config
 
-    def train_epoch():
+    
+    def train_epoch(dl, validation_dl):
+        
         model.train()  # Turn on the train mode
         total_loss = 0.
         total_positional_losses = 0.
@@ -116,20 +143,8 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
         before_get_batch = time.time()
         assert len(dl) % aggregate_k_gradients == 0, 'Please set the number of steps per epoch s.t. `aggregate_k_gradients` divides it.'
         pbar = tqdm(enumerate(dl))
+        print("len(dl)", len(dl))
         for batch, (data, targets, single_eval_pos) in pbar:
-            # print(f"Batch {batch}")
-            # print(f"Shapes: data {data[1].shape}, targets {targets.shape}, single_eval_pos {single_eval_pos}")
-            # print("Data", data)
-            # print("Targets", targets)
-            import numpy as np
-            print(np.unique(targets.cpu().numpy(), return_counts=True))
-            # print("Single eval pos", single_eval_pos)
-            # # save data to disk
-            if rank == 0:
-                import pickle
-                with open(f'data_{name}_{batch}.pkl', 'wb') as f:
-                    pickle.dump(data, f)
-
             if using_dist and not (batch % aggregate_k_gradients == aggregate_k_gradients - 1):
                 cm = model.no_sync()
             else:
@@ -144,8 +159,9 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
 
                 with autocast(enabled=scaler is not None):
                     # If style is set to None, it should not be transferred to device
+                    
                     output = model(tuple(e.to(device, non_blocking=True) if torch.is_tensor(e) else e for e in data) if (isinstance(data, tuple) or isinstance(data, list)) else data.to(device, non_blocking=True),
-                                      single_eval_pos=single_eval_pos)
+                                single_eval_pos=single_eval_pos)
 
                     forward_time = time.time() - before_forward
 
@@ -157,19 +173,24 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
 
                         mean_pred = output[..., 0]
                         var_pred = output[..., 1].abs()
-                        losses = criterion(mean_pred.flatten(), targets.to(device).flatten(), var=var_pred.flatten())
+                        losses = criterion(mean_pred.flatten(), targets.to(device, non_blocking=True).flatten(), var=var_pred.flatten())
                     elif isinstance(criterion, (nn.MSELoss, nn.BCEWithLogitsLoss)):
-                        losses = criterion(output.flatten(), targets.to(device).flatten())
+                        print("here")
+                        losses = criterion(output.flatten(), targets.to(device, non_blocking=True).flatten())
                     elif isinstance(criterion, nn.CrossEntropyLoss):
-                        losses = criterion(output.reshape(-1, n_out), targets.to(device).long().flatten())
+                        losses = criterion(output.reshape(-1, n_out), targets.to(device, non_blocking=True).long().flatten())
                     else:
                         losses = criterion(output, targets)
                     losses = losses.view(*output.shape[0:2])
                     loss, nan_share = utils.torch_nanmean(losses.mean(0), return_nanshare=True)
                     loss = loss / aggregate_k_gradients
+                    
+
+                    
 
 
                 if scaler: loss = scaler.scale(loss)
+                before_backward = time.time()
                 loss.backward()
 
                 if batch % aggregate_k_gradients == aggregate_k_gradients - 1:
@@ -184,27 +205,33 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
                     except:
                         print("Invalid optimization step encountered")
                     optimizer.zero_grad()
+                backward_time = time.time() - before_backward
 
                 step_time = time.time() - before_forward
 
+                pbar.set_description(f"Loss: {loss.item():.4f}, nan_share: {nan_share:.4f}, ignore_steps: {ignore_steps}, nan_steps: {nan_steps}")
+
                 if not torch.isnan(loss):
                     total_loss += losses.mean().cpu().detach().item()
+                    if batch % 20 == 0:
+                        print("Batch loss: ", losses.mean().cpu().detach().item())
+                        print(f"Batch {batch} took {step_time:.{2}f}s to process, {time_to_get_batch:.{2}f}s to get batch, {forward_time:.{2}f}s to forward")
                     total_positional_losses += losses.mean(1).cpu().detach() if single_eval_pos is None else \
                         nn.functional.one_hot(torch.tensor(single_eval_pos), bptt)*\
                         losses[:bptt-single_eval_pos].mean().cpu().detach()
-
                     total_positional_losses_recorded += torch.ones(bptt) if single_eval_pos is None else \
                         nn.functional.one_hot(torch.tensor(single_eval_pos), bptt)
                 nan_steps += nan_share
+
                 ignore_steps += (targets == -100).float().mean()
 
-                pbar.set_description(f"Loss: {loss.item():.4f}, nan_share: {nan_share:.4f}, ignore_steps: {ignore_steps}, nan_steps: {nan_steps}")
-
-
             before_get_batch = time.time()
+        print("Epoch Loss", total_loss / steps_per_epoch)
+            
+        
         return total_loss / steps_per_epoch, (total_positional_losses / total_positional_losses_recorded).tolist(),\
-               time_to_get_batch, forward_time, step_time, nan_steps.cpu().item()/(batch+1),\
-               ignore_steps.cpu().item()/(batch+1)
+            time_to_get_batch, forward_time, step_time, nan_steps.cpu().item()/(batch+1),\
+            ignore_steps.cpu().item()/(batch+1)
 
     total_loss = float('inf')
     total_positional_losses = float('inf')
@@ -212,19 +239,76 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
         for epoch in (range(1, epochs + 1) if epochs is not None else itertools.count(1)):
 
             epoch_start_time = time.time()
-            total_loss, total_positional_losses, time_to_get_batch, forward_time, step_time, nan_share, ignore_share =\
-                train_epoch()
+            total_loss, total_positional_losses, time_to_get_batch, forward_time, step_time, nan_share,\
+            ignore_share =\
+                train_epoch(dl, validation_dl)
+
+                    
             if hasattr(dl, 'validate') and epoch % validation_period == 0:
                 with torch.no_grad():
                     val_score = dl.validate(model)
             else:
                 val_score = None
 
-            if epoch % 20 == 0 and epoch > 0 and rank == 0:
+            if (use_wandb or use_neptune) and rank == 0:
+                model_sklearn = TabPFNClassifier(no_preprocess_mode=True, device=device)
+                model_pytorch = load_model_no_train_from_pytorch(model, config_sample=model_sklearn.c)[0]
+                model_sklearn.model = model_pytorch
+                if validate_on_datasets:
+                    try:
+                        import idr_torch
+                        on_jean_zay = True
+                        print("We're on Jean Zay, loading the datasets from pickle")
+                    except:
+                        on_jean_zay = False
+                        print("We're not on Jean Zay, loading the datasets from openml")
+                    if on_jean_zay or get_openml_from_pickle:
+                        measure_on_datasets = get_validation_performance(model_sklearn, datasets = [
+                                [44089, 44120, 44121, 44122, 44123, 44125, 44126, 44128, 44129, 44130, 45022,
+                                    45021, 45020, 45019, 45028, 45026],
+                                [44156, 44157, 44159, 45035, 45036, 45038, 45039]
+                        ])
+                    else:
+                        measure_on_datasets = get_validation_performance(model_sklearn)
+                    #except:
+                    #    print("Failed to get validation performance")
+                    #    measure_on_datasets = {}
+                else:
+                    measure_on_datasets = {}
+                metric_dic = {
+                        "epoch": epoch,
+                        "train_loss": total_loss,
+                        "lr": optimizer.param_groups[0]['lr'],
+                        "time_to_get_batch": time_to_get_batch,
+                        "forward_time": forward_time,
+                        "step_time": step_time,
+                        "nan_share": nan_share,
+                        "ignore_share": ignore_share,
+                        **measure_on_datasets
+                    }
+                if use_wandb:
+                    try:
+                        wandb.log(metric_dic)
+                    except Exception as e:
+                        print("Failed to log to wandb on epoch", epoch)
+                        print("Printing exception", e)
+                if use_neptune:
+                    try:
+                        for key, value in metric_dic.items():
+                            run["metrics/" + key].append(value)
+                    except Exception as e:
+                        print("Failed to log to neptune on epoch", epoch)
+                        print("Printing exception", e)
+                    
+            
+            if epoch % save_every == 0 and epoch > 0 and rank == 0:
                 # Save model
+                #TODO save config
                 torch.save({"model_state_dict": model.state_dict(),
                             "optimizer_state_dict": optimizer.state_dict(),
-                            "epoch": epoch}, f"./model_checkpoints/model_{name}_{epoch}.pt")
+                            "scheduler_state_dict": scheduler.state_dict(),
+                            "epoch": epoch,
+                            "config":remove_callables(config)}, f"./model_checkpoints/model_{name}_{epoch}.pt")
                 print(f"./model_checkpoints/model_{name}_{epoch}.pt")
 
             if verbose:
@@ -238,6 +322,8 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
                     + (f'val score {val_score}' if val_score is not None else ''))
                 print('-' * 89)
 
+
+
             # stepping with wallclock time based scheduler
             if epoch_callback is not None and rank == 0:
                 epoch_callback(model, epoch / epochs)
@@ -246,6 +332,12 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
         pass
 
     if rank == 0: # trivially true for non-parallel training
+        # finish neptune run
+        if use_neptune:
+            run.stop()
+        # finish wandb run
+        if use_wandb:
+            wandb.finish()
         if isinstance(model, torch.nn.parallel.DistributedDataParallel):
             model = model.module
             dl = None

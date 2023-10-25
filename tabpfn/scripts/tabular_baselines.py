@@ -3,7 +3,7 @@ tabpfn_path = '../../'
 sys.path.insert(0, tabpfn_path)
 
 import pandas
-from catboost import CatBoostClassifier, Pool
+#from catboost import CatBoostClassifier, Pool
 from sklearn.model_selection import GridSearchCV
 from sklearn.model_selection import KFold
 from sklearn.model_selection import ParameterGrid
@@ -26,7 +26,7 @@ from sklearn import neighbors
 from sklearn.gaussian_process import GaussianProcessClassifier
 from sklearn.gaussian_process.kernels import RBF
 import numpy as np
-np.warnings.filterwarnings('ignore', category=np.VisibleDeprecationWarning) 
+#np.warnings.filterwarnings('ignore', category=np.VisibleDeprecationWarning) 
 
 import torch
 import itertools

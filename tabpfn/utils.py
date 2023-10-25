@@ -8,6 +8,8 @@ import itertools
 import torch
 from torch import nn
 from torch.optim.lr_scheduler import LambdaLR
+import torch.optim.lr_scheduler as lr_scheduler
+
 
 # copied from huggingface
 def get_cosine_schedule_with_warmup(optimizer, num_warmup_steps, num_training_steps, num_cycles=0.5, last_epoch=-1):
@@ -18,11 +20,25 @@ def get_cosine_schedule_with_warmup(optimizer, num_warmup_steps, num_training_st
 
     def lr_lambda(current_step):
         if current_step < num_warmup_steps:
-            return float(current_step) / float(max(1, num_warmup_steps))
-        progress = float(current_step - num_warmup_steps) / float(max(1, num_training_steps - num_warmup_steps))
+            return float(current_step + 1) / float(max(1, num_warmup_steps))
+        progress = float(current_step + 1 - num_warmup_steps) / float(max(1, num_training_steps - num_warmup_steps))
         return max(0.0, 0.5 * (1.0 + math.cos(math.pi * float(num_cycles) * 2.0 * progress)))
 
     return LambdaLR(optimizer, lr_lambda, last_epoch)
+
+def get_no_op_scheduler(optimizer, num_warmup_steps, num_training_steps, num_cycles=0.5, last_epoch=-1):
+    class NoOpScheduler(lr_scheduler._LRScheduler):
+        def __init__(self, optimizer, last_epoch=-1):
+            super(NoOpScheduler, self).__init__(optimizer, last_epoch)
+
+        def get_lr(self):
+            return [base_lr for base_lr in self.base_lrs]
+    return NoOpScheduler(optimizer, last_epoch)
+    
+    
+
+  
+  
 
 # copied from huggingface
 def get_restarting_cosine_schedule_with_warmup(optimizer, num_warmup_steps, num_training_steps, steps_per_restart, num_cycles=0.5, last_epoch=-1):
@@ -30,14 +46,14 @@ def get_restarting_cosine_schedule_with_warmup(optimizer, num_warmup_steps, num_
 
     def inner_lr_lambda(current_step, num_warmup_steps, num_training_steps):
         if current_step < num_warmup_steps:
-            return float(current_step) / float(max(1, num_warmup_steps))
-        progress = float(current_step - num_warmup_steps) / float(max(1, num_training_steps - num_warmup_steps))
+            return float(current_step + 1) / float(max(1, num_warmup_steps))
+        progress = float(current_step + 1 - num_warmup_steps) / float(max(1, num_training_steps - num_warmup_steps))
         return max(0.0, 0.5 * (1.0 + math.cos(math.pi * float(num_cycles) * 2.0 * progress)))
 
     def lr_lambda(current_step):
-        inner_step = current_step % steps_per_restart
+        inner_step = (current_step + 1) % steps_per_restart
         return inner_lr_lambda(inner_step,
-                               num_warmup_steps if current_step < steps_per_restart else 0,
+                               num_warmup_steps if current_step + 1 < steps_per_restart else 0,
                                steps_per_restart
                                )
 
@@ -252,13 +268,13 @@ def print_on_master_only(is_master):
 
 def init_dist(device):
     #print('init dist')
-    if 'LOCAL_RANK' in os.environ:
+    if 'LOCAL_RANK' in os.environ and torch.cuda.device_count() > 1:
         # launched with torch.distributed.launch
         rank = int(os.environ["LOCAL_RANK"])
         print('torch.distributed.launch and my rank is', rank)
         torch.cuda.set_device(rank)
         os.environ['CUDA_VISIBLE_DEVICES'] = str(rank)
-        torch.distributed.init_process_group(backend="nccl", init_method="env://", timeout=datetime.timedelta(seconds=20),
+        torch.distributed.init_process_group(backend="nccl", init_method="env://", timeout=datetime.timedelta(seconds=50),
                                              world_size=torch.cuda.device_count(), rank=rank)
         torch.distributed.barrier()
         print_on_master_only(rank == 0)
@@ -268,17 +284,25 @@ def init_dist(device):
     elif 'SLURM_PROCID' in os.environ and torch.cuda.device_count() > 1:
         # this is for multi gpu when starting with submitit
         assert device != 'cpu:0'
-        rank = int(os.environ['SLURM_PROCID'])
-        os.environ['MASTER_ADDR'] = 'localhost'
-        os.environ['MASTER_PORT'] = '12355'
+        try:
+            import idr_torch # this sets up the environment variables on Jean Zay
+            print("We're on Jean Zay, using idr_torch")
+            rank = idr_torch.rank
+            world_size = idr_torch.size
+        except:
+            # we're not on Jean Zay
+            rank = int(os.environ['SLURM_PROCID'])
+            os.environ['MASTER_ADDR'] = 'localhost'
+            os.environ['MASTER_PORT'] = '12355'
+            world_size = torch.cuda.device_count()
         torch.cuda.set_device(rank)
         os.environ['CUDA_VISIBLE_DEVICES'] = str(rank)
         print('distributed submitit launch and my rank is', rank)
         torch.distributed.init_process_group(backend="nccl", init_method="env://", timeout=datetime.timedelta(seconds=20),
-                                             world_size=torch.cuda.device_count(), rank=rank)
+                                             world_size=world_size, rank=rank)
         torch.distributed.barrier()
         print_on_master_only(rank == 0)
-        print(f"Distributed training on {torch.cuda.device_count()} GPUs, this is rank {rank}, "
+        print(f"Distributed training on {world_size} GPUs, this is rank {rank}, "
               "only I can print, but when using print(..., force=True) it will print on all ranks.")
 
         return True, rank, f'cuda:{rank}'
@@ -298,7 +322,7 @@ class NOP():
 def check_compatibility(dl):
     if hasattr(dl, 'num_outputs'):
         print('`num_outputs` for the DataLoader is deprecated. It is assumed to be 1 from now on.')
-        assert dl.num_outputs != 1, "We assume num_outputs to be 1. Instead of the num_ouputs change your loss." \
+        assert dl.dataset.num_outputs != 1, "We assume num_outputs to be 1. Instead of the num_ouputs change your loss." \
                                     "We specify the number of classes in the CE loss."
 
 def product_dict(dic):
@@ -311,3 +335,14 @@ def normalize_by_used_features_f(x, num_features_used, num_features, normalize_w
     if normalize_with_sqrt:
         return x / (num_features_used / num_features)**(1 / 2)
     return x / (num_features_used / num_features)
+
+def normalize_by_used_features_f2(x, num_features, normalize_with_sqrt=False):
+    #takes a padded tensor as input
+    assert normalize_with_sqrt == False, "Not implemented"
+    # find all-0 features
+    # shape of x is (seq_len, batch_size, num_features)
+    zeroes = torch.isclose(x, torch.zeros_like(x)).all(dim=0)
+    num_features_used = x.shape[2] - zeroes.sum(dim=1)
+    for i in range(x.shape[1]):
+        x[:, i, :] = x[:, i, :] / (num_features_used[i] / num_features)
+    return x

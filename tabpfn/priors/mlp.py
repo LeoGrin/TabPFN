@@ -52,6 +52,7 @@ def get_batch(batch_size, seq_len, num_features, hyperparameters, device=default
                     self.prior_mlp_hidden_dim = max(self.prior_mlp_hidden_dim, num_outputs + 2 * num_features)
                 else:
                     self.num_causes = num_features
+                
 
                 # This means that the mean and standard deviation of each cause is determined in advance
                 if self.pre_sample_causes:
@@ -138,6 +139,11 @@ def get_batch(batch_size, seq_len, num_features, hyperparameters, device=default
                 outputs_flat = torch.cat(outputs, -1)
 
                 if self.in_clique:
+                    # print('In clique')
+                    # print("outputs_flat.shape[-1]", outputs_flat.shape[-1])
+                    # print("num_outputs", num_outputs)
+                    # print("num_features", num_features)
+                    # print("---")
                     random_perm = random.randint(0, outputs_flat.shape[-1] - num_outputs - num_features) + torch.randperm(num_outputs + num_features, device=device)
                 else:
                     random_perm = torch.randperm(outputs_flat.shape[-1]-1, device=device)
@@ -166,7 +172,6 @@ def get_batch(batch_size, seq_len, num_features, hyperparameters, device=default
             # random feature rotation
             if self.random_feature_rotation:
                 x = x[..., (torch.arange(x.shape[-1], device=device)+random.randrange(x.shape[-1])) % x.shape[-1]]
-
             return x, y
 
     if hyperparameters.get('new_mlp_per_example', False):

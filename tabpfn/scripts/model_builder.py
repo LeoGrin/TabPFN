@@ -5,6 +5,8 @@ from tabpfn.transformer import TransformerModel
 from tabpfn.utils import get_uniform_single_eval_pos_sampler
 import torch
 import math
+import wandb
+import traceback
 
 def save_model(model, path, filename, config_sample):
     config_sample = {**config_sample}
@@ -190,7 +192,8 @@ def get_meta_gp_prior_hyperparameters(config):
     return config
 
 
-def get_model(config, device, should_train=True, verbose=False, state_dict=None, epoch_callback=None):
+def get_model(config, device, should_train=True, verbose=False, state_dict=None, epoch_callback=None,
+              scheduler=None):
     import tabpfn.priors as priors
     from tabpfn.train import train, Losses
     extra_kwargs = {}
@@ -256,6 +259,9 @@ def get_model(config, device, should_train=True, verbose=False, state_dict=None,
         if 'flexible' in config and config['flexible']:
             get_batch_base = make_get_batch(model_proto)
             extra_kwargs['get_batch'] = get_batch_base
+            extra_kwargs["assign_class_in_flexible_categorical"] = config["assign_class_in_flexible_categorical"] if "assign_class_in_flexible_categorical" in config else True
+            extra_kwargs["remove_outliers_in_flexible_categorical"] = config["remove_outliers_in_flexible_categorical"] if "remove_outliers_in_flexible_categorical" in config else True
+            extra_kwargs["normalize_x_in_flexible_categorical"] = config["normalize_x_in_flexible_categorical"] if "normalize_x_in_flexible_categorical" in config else True
             model_proto = priors.flexible_categorical
 
     if config.get('flexible'):
@@ -282,10 +288,10 @@ def get_model(config, device, should_train=True, verbose=False, state_dict=None,
     else:
         encoder = partial(encoders.Linear, replace_nan_by_zero=True)
 
-    if config['max_num_classes'] == 2:
-        loss = Losses.bce
-    elif config['max_num_classes'] > 2:
-        loss = Losses.ce(config['max_num_classes'])
+    #if config['max_num_classes'] == 2:
+   #     loss = Losses.bce
+   # elif config['max_num_classes'] > 2:
+    loss = Losses.ce(config['max_num_classes'])
 
 
     check_is_compatible = False if 'multiclass_loss_type' not in config else (config['multiclass_loss_type'] == 'compatible')
@@ -295,41 +301,63 @@ def get_model(config, device, should_train=True, verbose=False, state_dict=None,
     config['bptt_extra_samples'] = config['bptt_extra_samples'] if 'bptt_extra_samples' in config else None
     config['eval_positions'] = [int(config['bptt'] * 0.95)] if config['bptt_extra_samples'] is None else [int(config['bptt'])]
 
+    if "name" not in config:
+        config["name"] = "default"
+    if "use_wandb" not in config:
+        config["use_wandb"] = False
+    if "save_every" not in config:
+        config["save_every"] = 100
+
     epochs = 0 if not should_train else config['epochs']
     #print('MODEL BUILDER', model_proto, extra_kwargs['get_batch'])
-    model = train(model_proto.DataLoader
-                  , loss
-                  , encoder
-                  , style_encoder_generator = encoders.StyleEncoder if use_style else None
-                  , emsize=config['emsize']
-                  , nhead=config['nhead']
-                  # For unsupervised learning change to NanHandlingEncoder
-                  , y_encoder_generator= encoders.get_Canonical(config['max_num_classes']) if config.get('canonical_y_encoder', False) else encoders.Linear
-                  , pos_encoder_generator=None
-                  , batch_size=config['batch_size']
-                  , nlayers=config['nlayers']
-                  , nhid=config['emsize'] * config['nhid_factor']
-                  , epochs=epochs
-                  , warmup_epochs=20
-                  , bptt=config['bptt']
-                  , gpu_device=device
-                  , dropout=config['dropout']
-                  , steps_per_epoch=config['num_steps']
-                  , single_eval_pos_gen=get_uniform_single_eval_pos_sampler(config.get('max_eval_pos', config['bptt']), min_len=config.get('min_eval_pos', 0))
-                  , load_weights_from_this_state_dict=state_dict
-                  , aggregate_k_gradients=config['aggregate_k_gradients']
-                  , recompute_attn=config['recompute_attn']
-                  , epoch_callback=epoch_callback
-                  , bptt_extra_samples = config['bptt_extra_samples']
-                  , extra_prior_kwargs_dict={
-            'num_features': config['num_features']
-            , 'hyperparameters': prior_hyperparameters
-            #, 'dynamic_batch_size': 1 if ('num_global_att_tokens' in config and config['num_global_att_tokens']) else 2
-            , 'batch_size_per_gp_sample': config.get('batch_size_per_gp_sample', None)
-            , **extra_kwargs
-        }
-                  , lr=config['lr']
-                  , verbose=verbose_train,
-                  weight_decay=config.get('weight_decay', 0.0))
-
+    try:
+        model = train(model_proto.DataLoader
+                    , loss
+                    , encoder
+                    , name = config['name']
+                    , use_wandb=config["use_wandb"]
+                    , wandb_offline=config["wandb_offline"]
+                    , get_openml_from_pickle=config["get_openml_from_pickle"]
+                    , use_neptune=config["use_neptune"]
+                    , validate_on_datasets=config["validate_on_datasets"]
+                    , save_every=config['save_every']
+                    , style_encoder_generator = encoders.StyleEncoder if use_style else None
+                    , emsize=config['emsize']
+                    , nhead=config['nhead']
+                    # For unsupervised learning change to NanHandlingEncoder
+                    , y_encoder_generator= encoders.get_Canonical(config['max_num_classes']) if config.get('canonical_y_encoder', False) else encoders.Linear
+                    , pos_encoder_generator=None
+                    , batch_size=config['batch_size']
+                    , nlayers=config['nlayers']
+                    , nhid=config['emsize'] * config['nhid_factor']
+                    , epochs=epochs
+                    , warmup_epochs=20
+                    , bptt=config['bptt']
+                    , gpu_device=device
+                    , dropout=config['dropout']
+                    , steps_per_epoch=config['num_steps']
+                    , single_eval_pos_gen=get_uniform_single_eval_pos_sampler(config.get('max_eval_pos', config['bptt']), min_len=config.get('min_eval_pos', 0))
+                    , load_weights_from_this_state_dict=state_dict
+                    , aggregate_k_gradients=config['aggregate_k_gradients']
+                    , recompute_attn=config['recompute_attn']
+                    , epoch_callback=epoch_callback
+                    , bptt_extra_samples = config['bptt_extra_samples']
+                    , extra_prior_kwargs_dict={
+                'num_features': config['num_features']
+                , 'hyperparameters': prior_hyperparameters
+                #, 'dynamic_batch_size': 1 if ('num_global_att_tokens' in config and config['num_global_att_tokens']) else 2
+                , 'batch_size_per_gp_sample': config.get('batch_size_per_gp_sample', None)
+                , **extra_kwargs
+            }
+                    , lr=config['lr']
+                    , verbose=verbose_train,
+                    weight_decay=config.get('weight_decay', 0.0),
+                    config=config)
+    except Exception as e:
+        print("Exception in training")
+        print(e)
+        print(traceback.format_exc())
+        #wandb.run.finish()
+    if config["use_wandb"]:
+        wandb.finish()
     return model
