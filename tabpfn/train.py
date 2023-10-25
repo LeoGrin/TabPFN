@@ -117,14 +117,14 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
         assert len(dl) % aggregate_k_gradients == 0, 'Please set the number of steps per epoch s.t. `aggregate_k_gradients` divides it.'
         pbar = tqdm(enumerate(dl))
         for batch, (data, targets, single_eval_pos) in pbar:
-            print(f"Batch {batch}")
-            print(f"Shapes: data {data[1].shape}, targets {targets.shape}, single_eval_pos {single_eval_pos}")
-            print("Data", data)
-            print("Targets", targets)
+            # print(f"Batch {batch}")
+            # print(f"Shapes: data {data[1].shape}, targets {targets.shape}, single_eval_pos {single_eval_pos}")
+            # print("Data", data)
+            # print("Targets", targets)
             import numpy as np
             print(np.unique(targets.cpu().numpy(), return_counts=True))
-            print("Single eval pos", single_eval_pos)
-            # save data to disk
+            # print("Single eval pos", single_eval_pos)
+            # # save data to disk
             if rank == 0:
                 import pickle
                 with open(f'data_{name}_{batch}.pkl', 'wb') as f:

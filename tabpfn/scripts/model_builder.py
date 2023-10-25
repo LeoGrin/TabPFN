@@ -241,6 +241,8 @@ def get_model(config, device, should_train=True, verbose=False, state_dict=None,
             model_proto = priors.fast_gp_mix
         elif config['prior_type'] == 'trees':
             prior_hyperparameters = get_trees_prior_hyperparameters(config)
+            prior_hyperparameters['normalize_labels'] = True
+            prior_hyperparameters['check_is_compatible'] = True #like for flexible_categorical
             print(prior_hyperparameters)
             # we want to handle padding, and normalization by used features in the trees prior, not in flexible_categorical
             assert prior_hyperparameters['num_features'] == prior_hyperparameters['num_features_max'] == config['num_features_used']

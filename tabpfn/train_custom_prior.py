@@ -61,7 +61,7 @@ parser.add_argument('--n_relevant_features_min', type=int, default=None)
 parser.add_argument('--sampling', type=str, default="mixed")
 parser.add_argument('--bptt', type=int, default=1152)
 parser.add_argument('--max_eval_pos', type=int, default=1000)
-parser.add_argument('--aggregate_k_gradients', type=int, default=8)
+parser.add_argument('--aggregate_k_gradients', type=int, default=1)
 #parser.add_argument('--scheduler', type=str, default="cosine")
 
 parser.add_argument("--test", action='store_true')
@@ -207,12 +207,12 @@ config = {'lr': 0.0001,
   #'prior_type': 'prior_bag',
   'prior_type': 'mlp',
   'differentiable': True,
-  'flexible': True,
+  'flexible': False,
   'aggregate_k_gradients': 8,
   'recompute_attn': True,
   'bptt_extra_samples': None,
   #'bptt': 1152,
-  'bptt': 5048,
+  #'bptt': 5048,
   'dynamic_batch_size': False,
   'multiclass_loss_type': 'nono',
   'output_multiclass_ordered_p': 0.0,
@@ -249,7 +249,7 @@ for param_name, param_value in args.__dict__.items():
 if args.prior == "trees":
   config["num_features_used"] = config["num_features"] # we don't want flexible_categorical to handle padding and normalization by used features, as we do this in tree
   config["num_features_max"] = config["num_features"]
-  config["num_features_sampler"] = uniform_int_sampler_f(3, config['num_features'])
+  config["num_features_sampler"] = uniform_int_sampler_f(3, config['num_features']) #NOT USED
 config["seq_len_used"] = 50
 
 config["num_classes"] = uniform_int_sampler_f(2, config['max_num_classes'])
