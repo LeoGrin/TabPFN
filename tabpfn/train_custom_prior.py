@@ -62,14 +62,7 @@ parser.add_argument('--sampling', type=str, default="mixed")
 parser.add_argument('--bptt', type=int, default=1152)
 parser.add_argument('--max_eval_pos', type=int, default=1000)
 parser.add_argument('--aggregate_k_gradients', type=int, default=8)
-parser.add_argument('--get_openml_from_pickle', action='store_true')
-parser.add_argument('--curriculum', action='store_true')
-parser.add_argument('--curriculum_step', type=int, default=10)
-parser.add_argument('--curriculum_tol', type=float, default=0.1)
-parser.add_argument('--curriculum_start', type=int, default=5)
-parser.add_argument('--criterion_curriculum', type=str, default='relative')
 #parser.add_argument('--scheduler', type=str, default="cosine")
-parser.add_argument("--reset_optim_on_curriculum_step", action='store_true')
 
 parser.add_argument("--test", action='store_true')
 
@@ -77,7 +70,7 @@ parser.add_argument("--test", action='store_true')
 parser.add_argument('--emsize', default=512, type=int) # sometimes even larger is better e.g. 1024
 
 # whether to return directly the classes instead of the probabilities
-parser.add_argument('--return_classes', action='store_true')
+parser.add_argument('--return_classes_in_trees_prior', action='store_true')
 #whether to randomize the leaves of the fitted tree before predicting
 parser.add_argument('--randomize_leaves', action='store_true')
 
@@ -118,138 +111,6 @@ base_path = '.'
 
 print(f"Using device {device}")
 
-# config = {'lr': 0.0001,
-#         'dropout': 0.0,
-#         'emsize': 512,
-#         'batch_size': 1,
-#         'nlayers': 12,
-#         'num_features': 100,
-#         'nhead': 4,
-#         'nhid_factor': 2,
-#         'bptt': 10,
-#         'eval_positions': [9],
-#         'seq_len_used': 50,
-#         'sampling': 'mixed',
-#         'epochs': 400,
-#         'num_steps': 8192,
-#         'verbose': False,
-#         'mix_activations': True,
-#         'nan_prob_unknown_reason_reason_prior': 1.0,
-#         'categorical_feature_p': 0.2,
-#         'nan_prob_no_reason': 0.0,
-#         'nan_prob_unknown_reason': 0.0,
-#         'nan_prob_a_reason': 0.0,
-#         'max_num_classes': 10,
-#         'num_classes': 2,
-#         'noise_type': 'Gaussian',
-#         'balanced': False,
-#         'normalize_to_ranking': False,
-#         'set_value_to_nan': 0.1,
-#         'normalize_by_used_features': True,
-#         'num_features_used': 100, #TODO: check
-#         'num_categorical_features_sampler_a': -1.0,
-#         'differentiable_hyperparameters': {'prior_bag_exp_weights_1': {'distribution': 'uniform',
-#         'min': 1000000.0,
-#         'max': 1000001.0},
-#         'num_layers': {'distribution': 'meta_trunc_norm_log_scaled',
-#         'max_mean': 6,
-#         'min_mean': 1,
-#         'round': True,
-#         'lower_bound': 2},
-#         'prior_mlp_hidden_dim': {'distribution': 'meta_trunc_norm_log_scaled',
-#         'max_mean': 130,
-#         'min_mean': 5,
-#         'round': True,
-#         'lower_bound': 4},
-#         'prior_mlp_dropout_prob': {'distribution': 'meta_beta',
-#         'scale': 0.9,
-#         'min': 0.1,
-#         'max': 5.0},
-#         'noise_std': {'distribution': 'meta_trunc_norm_log_scaled',
-#         'max_mean': 0.3,
-#         'min_mean': 0.0001,
-#         'round': False,
-#         'lower_bound': 0.0},
-#         'init_std': {'distribution': 'meta_trunc_norm_log_scaled',
-#         'max_mean': 10.0,
-#         'min_mean': 0.01,
-#         'round': False,
-#         'lower_bound': 0.0},
-#         'num_causes': {'distribution': 'meta_trunc_norm_log_scaled',
-#         'max_mean': 12,
-#         'min_mean': 1,
-#         'round': True,
-#         'lower_bound': 1},
-#         'is_causal': {'distribution': 'meta_choice', 'choice_values': [True, False]},
-#         'pre_sample_weights': {'distribution': 'meta_choice',
-#         'choice_values': [True, False]},
-#         'y_is_effect': {'distribution': 'meta_choice',
-#         'choice_values': [True, False]},
-#         'prior_mlp_activations': {'distribution': 'meta_choice_mixed',
-#         'choice_values': [torch.nn.modules.activation.Tanh,
-#             torch.nn.modules.linear.Identity,
-#             torch.nn.modules.activation.Tanh,
-#             #get_diff_causal,
-#             torch.nn.modules.activation.ELU],
-#         'choice_values_used': ["<class 'torch.nn.modules.activation.Tanh'>",
-#             "<class 'torch.nn.modules.linear.Identity'>",
-#             '<function get_diff_causal.<locals>.<lambda> at 0x7fc575dfb670>',
-#             "<class 'torch.nn.modules.activation.ELU'>"]},
-#         'block_wise_dropout': {'distribution': 'meta_choice',
-#         'choice_values': [True, False]},
-#         'sort_features': {'distribution': 'meta_choice',
-#         'choice_values': [True, False]},
-#         'in_clique': {'distribution': 'meta_choice', 'choice_values': [True, False]},
-#         'sampling': {'distribution': 'meta_choice',
-#         'choice_values': ['normal', 'mixed']},
-#         'pre_sample_causes': {'distribution': 'meta_choice',
-#         'choice_values': [True, False]},
-#         'outputscale': {'distribution': 'meta_trunc_norm_log_scaled',
-#         'max_mean': 10.0,
-#         'min_mean': 1e-05,
-#         'round': False,
-#         'lower_bound': 0},
-#         'lengthscale': {'distribution': 'meta_trunc_norm_log_scaled',
-#         'max_mean': 10.0,
-#         'min_mean': 1e-05,
-#         'round': False,
-#         'lower_bound': 0},
-#         'noise': {'distribution': 'meta_choice',
-#         'choice_values': [1e-05, 0.0001, 0.01]},
-#         'multiclass_type': {'distribution': 'meta_choice',
-#         'choice_values': ['value', 'rank']}},
-#         'prior_type': 'prior_bag',
-#         'differentiable': True,
-#         'flexible': True,
-#         'aggregate_k_gradients': 8,
-#         'recompute_attn': True,
-#         'bptt_extra_samples': None,
-#         'dynamic_batch_size': False,
-#         'multiclass_loss_type': 'nono',
-#         'output_multiclass_ordered_p': 0.0,
-#         'normalize_with_sqrt': False,
-#         'new_mlp_per_example': True,
-#         'prior_mlp_scale_weights_sqrt': True,
-#         'batch_size_per_gp_sample': None,
-#         'normalize_ignore_label_too': True,
-#         'differentiable_hps_as_style': False,
-#         'max_eval_pos': 1000,
-#         'random_feature_rotation': True,
-#         'rotate_normalized_labels': True,
-#         'canonical_y_encoder': False,
-#         'total_available_time_in_s': None,
-#         'train_mixed_precision': True,
-#         'efficient_eval_masking': True,
-#         'multiclass_type': 'rank',
-#         'done_part_in_training': 0.8425,
-#         'num_features_used_in_training': {'uniform_int_sampler_f(3,max_features)': '<function <lambda>.<locals>.<lambda> at 0x7fc575dfb5e0>'},
-#         'num_classes_in_training': '<function <lambda>.<locals>.<lambda> at 0x7fc575dfb550>',
-#         'batch_size_in_training': 8,
-#         'bptt_in_training': 1024,
-#         'bptt_extra_samples_in_training': None,
-#         'name': 'default',
-#         'use_wandb': False,
-#         'save_every': 100}
 
 config = {'lr': 0.0001,
   'dropout': 0.0,
@@ -418,8 +279,8 @@ if args.prior is not None:
     config["max_depth_lambda"] = args.max_depth_lambda
     config["min_categories"] = args.min_categories
     config["max_categories"] = args.max_categories
-    config["assign_class_in_flexible_categorical"] = not args.return_classes
-    config["return_classes"] = args.return_classes
+    #config["assign_class_in_flexible_categorical"] = not args.return_classes
+    config["return_classes_in_trees_prior"] = args.return_classes_in_trees_prior
     config["randomize_leaves"] = args.randomize_leaves
     print(f"Using {args.prior} prior with n_estimators_lambda={args.n_estimators_lambda}, n_estimators={args.n_estimators}, max_depth_lambda={args.max_depth_lambda}")
 

@@ -54,7 +54,7 @@ def randomize_leaves_func(forest, n_classes):
     return forest
 
 
-
+@torch.no_grad()
 def get_batch(batch_size, seq_len, num_features_max, num_features_sampler, hyperparameters, device=default_device, num_outputs=1, sampling='normal'
               , epoch=None, **kwargs):
     if 'multiclass_type' in hyperparameters and hyperparameters['multiclass_type'] == 'multi_node':
@@ -148,8 +148,7 @@ def get_batch(batch_size, seq_len, num_features_max, num_features_sampler, hyper
         
         if hyperparameters["randomize_leaves"]:
             forest = randomize_leaves_func(forest, num_classes)
-
-        if hyperparameters["return_classes"]:
+        if hyperparameters["return_classes_in_trees_prior"]:
             y = forest.predict(X)
         else:
             # uses flexible_categorical class_assigner
@@ -169,6 +168,9 @@ def get_batch(batch_size, seq_len, num_features_max, num_features_sampler, hyper
         
         # normalize by used features
         if hyperparameters["normalize_by_used_features"]:
+            print("Normalizing by used features")
+            print("data.shape", data.shape)
+            print("num_features_max", num_features_max)
             data = normalize_by_used_features_f(data, data.shape[-1], num_features_max, normalize_with_sqrt=hyperparameters["normalize_with_sqrt"])
 
         return data.reshape(-1, 1, num_features).float(), torch.from_numpy(y).reshape(-1, 1, num_outputs).float()
@@ -192,9 +194,7 @@ def get_batch(batch_size, seq_len, num_features_max, num_features_sampler, hyper
     # then concat
     x = torch.cat(x, 1).detach()
     
-    
     return x, y, y
 
 
 DataLoader = get_batch_to_dataloader(get_batch)
-

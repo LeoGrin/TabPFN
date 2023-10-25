@@ -19,6 +19,7 @@ import tabpfn.positional_encodings as positional_encodings
 from tabpfn.utils import init_dist
 from torch.cuda.amp import autocast, GradScaler
 from torch import nn
+from tqdm import tqdm
 
 class Losses():
     gaussian = nn.GaussianNLLLoss(full=True, reduction='none')
@@ -37,6 +38,8 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
           aggregate_k_gradients=1, verbose=True, style_encoder_generator=None, epoch_callback=None,
           initializer=None, initialize_with_model=None, train_mixed_precision=False, efficient_eval_masking=True, **model_extra_args
           ):
+    # generate a random name for the model
+    name = datetime.datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
     device = gpu_device if torch.cuda.is_available() else 'cpu:0'
     print(f'Using {device} device')
     using_dist, rank, device = init_dist(device)
@@ -48,9 +51,12 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
             return single_eval_pos, single_eval_pos + bptt_extra_samples
         else:
             return single_eval_pos, bptt
-    dl = priordataloader_class(num_steps=steps_per_epoch, batch_size=batch_size, eval_pos_seq_len_sampler=eval_pos_seq_len_sampler, seq_len_maximum=bptt+(bptt_extra_samples if bptt_extra_samples else 0), device=device, **extra_prior_kwargs_dict)
+    get_batch_args = {"num_steps":steps_per_epoch, "batch_size":batch_size, "eval_pos_seq_len_sampler":eval_pos_seq_len_sampler, "seq_len_maximum":bptt+(bptt_extra_samples if bptt_extra_samples else 0), "device":device, **extra_prior_kwargs_dict}
+    dataloader_args = {"num_workers":10, "pin_memory":True, "persistent_workers":True, "prefetch_factor":3}
+    dl = priordataloader_class(dataloader_args, get_batch_args)
 
-    encoder = encoder_generator(dl.num_features, emsize)
+
+    encoder = encoder_generator(dl.dataset.num_features, emsize)
     #style_def = dl.get_test_batch()[0][0] # the style in batch of the form ((style, x, y), target, single_eval_pos)
     style_def = None
     #print(f'Style definition of first 3 examples: {style_def[:3] if style_def is not None else None}')
@@ -109,7 +115,21 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
         ignore_steps = 0
         before_get_batch = time.time()
         assert len(dl) % aggregate_k_gradients == 0, 'Please set the number of steps per epoch s.t. `aggregate_k_gradients` divides it.'
-        for batch, (data, targets, single_eval_pos) in enumerate(dl):
+        pbar = tqdm(enumerate(dl))
+        for batch, (data, targets, single_eval_pos) in pbar:
+            print(f"Batch {batch}")
+            print(f"Shapes: data {data[1].shape}, targets {targets.shape}, single_eval_pos {single_eval_pos}")
+            print("Data", data)
+            print("Targets", targets)
+            import numpy as np
+            print(np.unique(targets.cpu().numpy(), return_counts=True))
+            print("Single eval pos", single_eval_pos)
+            # save data to disk
+            if rank == 0:
+                import pickle
+                with open(f'data_{name}_{batch}.pkl', 'wb') as f:
+                    pickle.dump(data, f)
+
             if using_dist and not (batch % aggregate_k_gradients == aggregate_k_gradients - 1):
                 cm = model.no_sync()
             else:
@@ -124,8 +144,8 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
 
                 with autocast(enabled=scaler is not None):
                     # If style is set to None, it should not be transferred to device
-                    output = model(tuple(e.to(device) if torch.is_tensor(e) else e for e in data) if isinstance(data, tuple) else data.to(device)
-                                   , single_eval_pos=single_eval_pos)
+                    output = model(tuple(e.to(device, non_blocking=True) if torch.is_tensor(e) else e for e in data) if (isinstance(data, tuple) or isinstance(data, list)) else data.to(device, non_blocking=True),
+                                      single_eval_pos=single_eval_pos)
 
                     forward_time = time.time() - before_forward
 
@@ -147,6 +167,7 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
                     losses = losses.view(*output.shape[0:2])
                     loss, nan_share = utils.torch_nanmean(losses.mean(0), return_nanshare=True)
                     loss = loss / aggregate_k_gradients
+
 
                 if scaler: loss = scaler.scale(loss)
                 loss.backward()
@@ -177,6 +198,8 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
                 nan_steps += nan_share
                 ignore_steps += (targets == -100).float().mean()
 
+                pbar.set_description(f"Loss: {loss.item():.4f}, nan_share: {nan_share:.4f}, ignore_steps: {ignore_steps}, nan_steps: {nan_steps}")
+
 
             before_get_batch = time.time()
         return total_loss / steps_per_epoch, (total_positional_losses / total_positional_losses_recorded).tolist(),\
@@ -196,6 +219,13 @@ def train(priordataloader_class, criterion, encoder_generator, emsize=200, nhid=
                     val_score = dl.validate(model)
             else:
                 val_score = None
+
+            if epoch % 20 == 0 and epoch > 0 and rank == 0:
+                # Save model
+                torch.save({"model_state_dict": model.state_dict(),
+                            "optimizer_state_dict": optimizer.state_dict(),
+                            "epoch": epoch}, f"./model_checkpoints/model_{name}_{epoch}.pt")
+                print(f"./model_checkpoints/model_{name}_{epoch}.pt")
 
             if verbose:
                 print('-' * 89)

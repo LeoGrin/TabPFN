@@ -104,7 +104,6 @@ class FlexibleCategorical(torch.nn.Module):
         self.args_passed = {**self.args}
         self.args_passed.update({'num_features': self.h['num_features_used']})
         self.get_batch = get_batch
-        print("num_classes flexible", self.h["num_classes"])
 
         if self.h['num_classes'] == 0:
             self.class_assigner = RegressionNormalized()
@@ -179,6 +178,15 @@ class FlexibleCategorical(torch.nn.Module):
             x = to_ranking_low_mem(x)
         else:
             x = remove_outliers(x)
+
+        # checks for class assignment before normalization
+        if not self.h.get('return_classes_in_trees_prior', False):
+            # check that the class has not been assigned yet
+            assert not (y.long() == y).all(), f"Classes already assigned: {y[:10]}"
+        else:
+            # check that the class has been assigned
+            assert (y.long() == y).all(), f"Classes not assigned: {y[:10]}"
+
         x, y = normalize_data(x), normalize_data(y)
 
         if time_it:
@@ -186,21 +194,25 @@ class FlexibleCategorical(torch.nn.Module):
             start = time.time()
 
         # Cast to classification if enabled
-        y = self.class_assigner(y).float()
+        if not self.h.get('return_classes_in_trees_prior', False):
+            y = self.class_assigner(y).float()
 
         if time_it:
             print('Flex Forward Block 4', round(time.time() - start, 3))
             start = time.time()
-        if self.h['normalize_by_used_features']:
-            x = normalize_by_used_features_f(x, self.h['num_features_used'], self.args['num_features'], normalize_with_sqrt=self.h.get('normalize_with_sqrt',False))
+        if not self.h["prior"] == "trees":
+            # we handle that directly in the tree prior
+            if self.h['normalize_by_used_features']:
+                x = normalize_by_used_features_f(x, self.h['num_features_used'], self.args['num_features'], normalize_with_sqrt=self.h.get('normalize_with_sqrt',False))
         if time_it:
             print('Flex Forward Block 5', round(time.time() - start, 3))
 
         start = time.time()
         # Append empty features if enabled
-        x = torch.cat(
-            [x, torch.zeros((x.shape[0], x.shape[1], self.args['num_features'] - self.h['num_features_used']),
-                            device=self.args['device'])], -1)
+        if not self.h["prior"] == "trees":
+            x = torch.cat(
+                [x, torch.zeros((x.shape[0], x.shape[1], self.args['num_features'] - self.h['num_features_used']),
+                                device=x.device)], -1)
         if time_it:
             print('Flex Forward Block 6', round(time.time() - start, 3))
 
@@ -238,7 +250,7 @@ class FlexibleCategorical(torch.nn.Module):
                     num_classes_float = (y[valid_labels, b].max() + 1).cpu()
                     num_classes = num_classes_float.int().item()
                     assert num_classes == num_classes_float.item()
-                    random_shift = torch.randint(0, num_classes, (1,), device=self.args['device'])
+                    random_shift = torch.randint(0, num_classes, (1,), device=y.device)#device=self.args['device'])
                     y[valid_labels, b] = (y[valid_labels, b] + random_shift) % num_classes
 
         return x, y, y  # x.shape = (T,B,H)
@@ -257,7 +269,10 @@ def get_batch(batch_size, seq_len, num_features, get_batch, device, hyperparamet
 
     args = {'device': device, 'seq_len': seq_len, 'num_features': num_features, 'batch_size': batch_size_per_gp_sample, **kwargs}
 
-    models = [FlexibleCategorical(get_batch, hyperparameters, args).to(device) for _ in range(num_models)]
+    if hyperparameters["prior"] == "trees":
+        models = [FlexibleCategorical(get_batch, hyperparameters, args) for _ in range(num_models)]
+    else:
+        models = [FlexibleCategorical(get_batch, hyperparameters, args).to(device) for _ in range(num_models)]
 
     sample = [model(batch_size=batch_size_per_gp_sample) for model in models]
 
