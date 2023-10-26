@@ -229,7 +229,8 @@ config = {'lr': 0.0001,
 
 config["seq_len_used"] = 50 #This should be used, but fails if not set
 # this should be replaced later
-config["num_classes"] = uniform_int_sampler_f(2, config['max_num_classes'])
+#config["num_classes"] = uniform_int_sampler_f(2, config['max_num_classes'])
+config["num_classes"] = 10
 config["num_features_used"] = {'num_features_func': uniform_int_sampler_f(3, config['num_features'])}
 
 
