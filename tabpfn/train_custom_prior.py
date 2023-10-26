@@ -94,6 +94,8 @@ parser.add_argument("--epochs", type=int, default=400)
 # local rank
 parser.add_argument("--local_rank", type=int, default=None)
 
+parser.add_argument("--num_classes_tree", type=int, default=None)
+
 args = parser.parse_args()
 
 if args.test:

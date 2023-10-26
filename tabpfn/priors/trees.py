@@ -147,7 +147,10 @@ def get_batch_trees(batch_size, seq_len, num_features_max, num_features_sampler,
         n_estimators = (1 + int(np.random.exponential(1. / hyperparameters['n_estimators_lambda']))) if (hyperparameters['n_estimators'] is None) else hyperparameters['n_estimators']
         time_forest = time.time()
         forest = ExtraTreesClassifier(max_depth=max_depth, n_estimators=n_estimators, max_features=1, n_jobs=1) # max_features=1 means that the splits are totally random
-        num_classes = hyperparameters['num_classes']  
+        if "num_classes_tree" in hyperparameters:
+            num_classes = hyperparameters["num_classes_tree"]
+        else:
+            num_classes = hyperparameters['num_classes']  
 
         fake_y = np.random.randint(0, num_classes, data.shape[0])
         # label encoder to prevent holes in the class labels (e.g. 0, 1, 3)
