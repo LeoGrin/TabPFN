@@ -99,16 +99,6 @@ def get_batch(batch_size, seq_len, num_features, hyperparameters, device=default
             full_encoder = ColumnTransformer([('cat', cat_encoder, categorical_features)], remainder='passthrough')
             X = full_encoder.fit_transform(X)
         
-        if np.random.random() < 0.0001:
-            print("------------------")
-            print("X")
-            print(X.shape)
-            print(X)
-            print("data")
-            print(data.shape)
-            print(data)
-            print("------------------")
-        
         # Sample max depth from uniform distribution
         max_depth = 2 + int(np.random.exponential( 1./ hyperparameters['max_depth_lambda']))
         # Sample number of trees from an exponential distribution with parameter lambda
@@ -131,20 +121,10 @@ def get_batch(batch_size, seq_len, num_features, hyperparameters, device=default
         if hyperparameters.get("random_feature_rotation", False):
             data = data[..., (torch.arange(data.shape[-1], device="cpu")+random.randrange(data.shape[-1])) % data.shape[-1]]
         
-        # # Pad data with zeros to have 100 features
-        # if data.shape[-1] < 100:
-        #     padding = torch.zeros((data.shape[0], 100 - data.shape[-1]), device=device)
-        #     data = torch.cat([data, padding], -1)
 
         return data.reshape(-1, 1, num_features).float(), torch.from_numpy(y).reshape(-1, 1, num_outputs).float()
 
     
-
-    # if hyperparameters.get('new_forest_per_example', False):
-    #     get_model = lambda: generate_random_forest(hyperparameters)
-    # else:
-    #     model = generate_random_forest(hyperparameters)
-    #     get_model = lambda: model
 
     sample = [get_seq() for _ in range(0, batch_size)]
 

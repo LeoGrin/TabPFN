@@ -40,6 +40,8 @@ parser = argparse.ArgumentParser(description='Train')
 parser.add_argument('--prior', type=str, default=None)
 # n_estimators
 # one of n_estimators_lambda or n_estimators must be set
+# lambdas are rates of exponential distributions (i.e. 1/lambda is the mean)
+# (but there is an offset)
 parser.add_argument('--n_estimators_lambda', type=float, default=0.15)
 parser.add_argument('--n_estimators', type=int, default=None)
 # max_depth
