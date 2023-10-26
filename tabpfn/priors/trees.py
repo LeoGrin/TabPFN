@@ -72,8 +72,9 @@ def get_batch_trees(batch_size, seq_len, num_features_max, num_features_sampler,
 
     correlation_strength = np.random.uniform(hyperparameters['correlation_strength_min'], hyperparameters['correlation_strength_max'])
     correlation_proba = np.random.uniform(hyperparameters['correlation_proba_min'], hyperparameters['correlation_proba_max'])
-    def get_seq():
-        num_features = num_features_sampler()
+    def get_seq(num_features=None):
+        if num_features is None:
+            num_features = num_features_sampler()
         if sampling == 'normal':
             # generate a random covariance matrix
             cov = np.eye(num_features)
@@ -194,8 +195,11 @@ def get_batch_trees(batch_size, seq_len, num_features_max, num_features_sampler,
     # else:
     #     model = generate_random_forest(hyperparameters)
     #     get_model = lambda: model
-
-    sample = [get_seq() for _ in range(0, batch_size)]
+    if hyperparameters['num_features_fixed']:
+        num_features = num_features_sampler()
+    else:
+        num_features = None
+    sample = [get_seq(num_features) for _ in range(0, batch_size)]
 
     x, y = zip(*sample)
     y = torch.cat(y, 1).detach().squeeze(2)
