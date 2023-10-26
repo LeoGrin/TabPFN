@@ -57,6 +57,8 @@ parser.add_argument('--correlation_strength_min', type=float, default=0.)
 parser.add_argument('--correlation_strength_max', type=float, default=0.2)
 parser.add_argument('--random_feature_removal', type=float, default=0.2)
 
+parser.add_argument("--num_classes_tree", type=int, default=None)
+
 #### General ####
 parser.add_argument('--bptt', type=int, default=1152)
 
@@ -233,13 +235,19 @@ config["num_features_used"] = {'num_features_func': uniform_int_sampler_f(3, con
 
 if args.prior is not None:
     assert args.prior in ['trees']
+    config["prior_type"] = args.prior
+    # we want to store these parameters in the config even if None
+    config["n_estimators_lambda"] = args.n_estimators_lambda
+    config["n_estimators"] = args.n_estimators
+    config["num_classes_tree"] = args.num_classes_tree
+    print(f"Using {args.prior} prior with n_estimators_lambda={args.n_estimators_lambda}, n_estimators={args.n_estimators}, max_depth_lambda={args.max_depth_lambda}")
 
 print(f"Using {args.prior} prior with n_estimators_lambda={args.n_estimators_lambda}, n_estimators={args.n_estimators}, max_depth_lambda={args.max_depth_lambda}")
 
-params = ["lr", "p_categorical", "batch_size", "num_steps", "correlation_proba_min",
+params = ["lr", "batch_size", "num_steps", "p_categorical", "correlation_proba_min",
           "correlation_proba_max", "correlation_strength_min", "correlation_strength_max",
-          "random_feature_removal", "prior_type", "n_estimators_lambda", "n_estimators",
-            "max_depth_lambda", "min_categories", "max_categories"]
+          "random_feature_removal", "max_depth_lambda", 
+            "min_categories", "max_categories", "bptt"]
 for param in params:
     if getattr(args, param) is not None:
         config[param] = getattr(args, param)
