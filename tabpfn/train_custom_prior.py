@@ -98,6 +98,8 @@ parser.add_argument("--num_classes_tree", type=int, default=None)
 
 parser.add_argument("--num_features_fixed", type=bool, default=True)
 
+parser.add_argument('--num_workers', default=10, type=int)
+
 args = parser.parse_args()
 
 if args.test:
