@@ -59,7 +59,8 @@ parser.add_argument('--correlation_strength_min', type=float, default=0.)
 parser.add_argument('--correlation_strength_max', type=float, default=0.2)
 parser.add_argument('--random_feature_removal', type=float, default=0.2)
 
-parser.add_argument("--num_classes_tree", type=int, default=None)
+parser.add_argument("--num_classes_tree", type=int, default=2) #Number of classes for the pretext y in the tree prior
+# None (same number of class than for flexible_categorical) also works, I haven't tried more than 2
 
 #### General ####
 parser.add_argument('--bptt', type=int, default=1152)
@@ -227,7 +228,7 @@ config = {'lr': 0.0001,
   "max_eval_pos": 1000}
 
 
-config["seq_len_used"] = 50 #This should be used, but fails if not set
+config["seq_len_used"] = 50 #This should not be used, but fails if not set
 # this should be replaced later
 #config["num_classes"] = uniform_int_sampler_f(2, config['max_num_classes'])
 config["num_classes"] = 10
